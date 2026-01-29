@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+            padding: 2rem;
+        }
+        h1 { margin-bottom: 0.25rem; }
+        .module {
+            background: #020617;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            border-radius: 6px;
+        }
+        ul { padding-left: 1.2rem; }
+    </style>
+</head>
+<body>
+
+<h1>Dashboard</h1>
+<p>
+    Logged in as <strong>{{ request.user.username }}</strong><br>
+    Tenant: <strong>{{ tenant.name }}</strong>
+</p>
+
+<hr>
+
+{% for module, actions in module_actions.items %}
+    <div class="module">
+        <h3>{{ module|title }}</h3>
+
+        {% if actions %}
+            <ul>
+                {% for action in actions %}
+                    <li>{{ action }}</li>
+                {% endfor %}
+            </ul>
+        {% else %}
+            <p>No actions permitted in current state.</p>
+        {% endif %}
+    </div>
+{% endfor %}
+
+</body>
+</html>
