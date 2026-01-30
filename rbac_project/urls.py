@@ -38,4 +38,13 @@ urlpatterns = [
 
     # Enquiry API
     path('api/', include('enquiry.api.urls')),
+
+    # FollowUp API
+    path('api/', include('followup.api.urls')),
+
+    # Organization API
+    path('api/', include('organization.api.urls')),
+
+    # Quotation API
+    path('api/', include('quotation.api.urls')),
 ]
