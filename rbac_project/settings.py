@@ -83,6 +83,7 @@ MIDDLEWARE = [
 
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.services.RBACMiddleware.RBACMiddleware'
 ]
 
 
@@ -130,7 +131,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'rbac_project',
         'USER': 'postgres',
-        'PASSWORD': 'msbc%123',
+        'PASSWORD': '1234',
         'HOST': 'localhost',
         'PORT': '5432',
     }

@@ -10,12 +10,26 @@
             padding: 2rem;
         }
         h1 { margin-bottom: 0.25rem; }
+
         .module {
             background: #020617;
             padding: 1rem;
             margin-bottom: 1rem;
             border-radius: 6px;
         }
+
+        .sub-module {
+            background: #020617;
+            margin-top: 0.75rem;
+            padding-left: 1rem;
+            border-left: 3px solid #334155;
+        }
+
+        .blocked {
+            color: #f87171;
+            font-size: 0.85rem;
+        }
+
         ul { padding-left: 1.2rem; }
     </style>
 </head>
@@ -29,19 +43,61 @@
 
 <hr>
 
-{% for module, actions in module_actions.items %}
-    <div class="module">
-        <h3>{{ module|title }}</h3>
+{% for module in modules %}
 
-        {% if actions %}
-            <ul>
-                {% for action in actions %}
-                    <li>{{ action }}</li>
-                {% endfor %}
-            </ul>
-        {% else %}
-            <p>No actions permitted in current state.</p>
+    <div class="module">
+        <h3>{{ module.name }} ({{ module.code }})</h3>
+
+        <!-- Module permissions -->
+        <strong>Permissions:</strong>
+        <ul>
+            {% for action, allowed in module.permissions.items %}
+                {% if allowed %}
+                    <li>{{ action|title }}</li>
+                {% endif %}
+            {% empty %}
+                <li>No permissions</li>
+            {% endfor %}
+        </ul>
+
+        <!-- Module blocked APIs -->
+        {% if module.blocked_apis %}
+            <div class="blocked">
+                <strong>Blocked APIs:</strong>
+                <ul>
+                    {% for api in module.blocked_apis %}
+                        <li>{{ api.method }} {{ api.path }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
         {% endif %}
+
+        <!-- Sub-modules -->
+        {% for sub in module.sub_modules %}
+            <div class="sub-module">
+                <h4>{{ sub.name }} ({{ sub.code }})</h4>
+
+                <strong>Permissions:</strong>
+                <ul>
+                    {% for action, allowed in sub.permissions.items %}
+                        {% if allowed %}
+                            <li>{{ action|title }}</li>
+                        {% endif %}
+                    {% endfor %}
+                </ul>
+
+                {% if sub.blocked_apis %}
+                    <div class="blocked">
+                        <strong>Blocked APIs:</strong>
+                        <ul>
+                            {% for api in sub.blocked_apis %}
+                                <li>{{ api.method }} {{ api.path }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
     </div>
 {% endfor %}
 

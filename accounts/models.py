@@ -2,7 +2,7 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.conf import settings
 
-from core.models import Tenant, Role
+from core.models import Tenant, Role, ApiOperation
 
 
 class UserManager(BaseUserManager):
@@ -11,9 +11,10 @@ class UserManager(BaseUserManager):
     """
 
     def create_user(self, username, email=None, password=None, tenant=None, **extra_fields):
+        is_superuser = extra_fields.get("is_superuser", False)
         if not username:
             raise ValueError("The Username must be set")
-        if tenant is None:
+        if tenant is None and not is_superuser:
             raise ValueError("User must belong to a tenant")
 
         email = self.normalize_email(email)
@@ -53,6 +54,8 @@ class User(AbstractUser):
     """
     tenant = models.ForeignKey(
         Tenant,
+        blank=False,
+        null=True,
         on_delete=models.PROTECT,
         related_name="users",
     )
@@ -88,3 +91,13 @@ class UserRole(models.Model):
 
     def __str__(self):
         return f"{self.user} → {self.role}"
+
+
+class UserApiBlock(models.Model):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    api_operation = models.ForeignKey(ApiOperation, on_delete=models.CASCADE)
+    reason = models.TextField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('tenant', 'user', 'api_operation')

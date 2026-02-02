@@ -6,7 +6,7 @@ from core.models import (
     TenantModule,
     Role,
     Permission,
-    RolePermission,
+    RolePermission, Action, ModuleSubModuleMapping, ApiEndpoint, ApiOperation, TenantApiOverride,
 )
 from accounts.models import UserRole
 
@@ -20,7 +20,7 @@ class TenantAdmin(admin.ModelAdmin):
 
 @admin.register(Module)
 class ModuleAdmin(admin.ModelAdmin):
-    list_display = ("id", "code", "name")
+    list_display = ( "code", "name")
     search_fields = ("code", "name")
 
 
@@ -48,15 +48,14 @@ class RoleAdmin(admin.ModelAdmin):
 
 @admin.register(Permission)
 class PermissionAdmin(admin.ModelAdmin):
-    list_display = ("id", "code")
-    search_fields = ("code",)
+    list_display = ("tenant_module","tenant_module", "action")
+    search_fields = ("action",)
 
 
 @admin.register(RolePermission)
 class RolePermissionAdmin(admin.ModelAdmin):
     list_display = ("role", "permission", "allowed")
     list_filter = ("role", "allowed")
-    search_fields = ("role__name", "permission__code")
     autocomplete_fields = ("role", "permission")
 
 
@@ -66,3 +65,30 @@ class UserRoleAdmin(admin.ModelAdmin):
     list_filter = ("role",)
     search_fields = ("user__username", "role__name")
     autocomplete_fields = ("user", "role")
+
+
+@admin.register(ModuleSubModuleMapping)
+class ModuleSubModuleMappingAdmin(admin.ModelAdmin):
+    list_display = ("module","module", "submodule","submodule")
+
+
+@admin.register(Action)
+class ActionModelAdmin(admin.ModelAdmin):
+    list_display = ("id", "code")
+
+
+@admin.register(ApiEndpoint)
+class ApiEndpointAdmin(admin.ModelAdmin):
+    list_display = ("id", "module","submodule","path")
+
+
+@admin.register(ApiOperation)
+class ApiOperationAdmin(admin.ModelAdmin):
+    list_display = ("id", "endpoint","http_method","action","is_enabled")
+
+
+@admin.register(TenantApiOverride)
+class TenantApiOverrideAdmin(admin.ModelAdmin):
+    list_display = ("id", "api_operation","is_enabled")
+
+
