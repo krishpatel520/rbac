@@ -11,24 +11,30 @@ from core.models import (
     SubModule,
 )
 
+
 class Command(BaseCommand):
-    help = "Universal API registry sync (ViewSet, APIView, CBV, FBV, Router-safe)"
+    help = "Sync application API endpoints and operations into RBAC tables"
 
     HTTP_ACTION_MAP = {
-        "get": "read",
+        "get": "view",
         "post": "create",
         "put": "update",
-        "patch": "partial_update",
+        "patch": "update",
         "delete": "delete",
     }
 
-    # -------------------------
-    # Entry Point
-    # -------------------------
+    # 🚫 Never register these in RBAC
+    SKIP_PATH_PREFIXES = (
+        "/admin/",
+        "/static/",
+        "/media/",
+        "/accounts/",
+        "/api/schema",
+    )
+
     def handle(self, *args, **options):
         resolver = get_resolver()
         default_module = self._get_default_module()
-        print("default module >>>",default_module)
 
         urlpatterns = []
         self._collect_urlpatterns(
@@ -42,26 +48,28 @@ class Command(BaseCommand):
 
         for raw_path, callback in urlpatterns:
             path = self._normalize_path(raw_path)
-            print("path >>>>",path)
+
+            if self._should_skip_path(path):
+                continue
 
             endpoint, ep_created = ApiEndpoint.objects.get_or_create(
                 path=path,
-                module=default_module,
+                defaults={"module": default_module},
             )
-            print(endpoint, "endpoint")
             if ep_created:
                 created_endpoints += 1
 
-            actions = self._resolve_actions(callback)
+            http_methods = self._resolve_http_methods(callback)
 
-            for raw_action in actions:
-                action_code = self._normalize_action(raw_action)
-                action = self._get_or_create_action(action_code)
+            for method in http_methods:
+                action_code = self.HTTP_ACTION_MAP.get(method, method)
+                action, _ = Action.objects.get_or_create(code=action_code)
 
                 _, op_created = ApiOperation.objects.get_or_create(
                     endpoint=endpoint,
-                    action=action,
+                    http_method=method.upper(),
                     defaults={
+                        "action": action,
                         "is_enabled": True,
                     },
                 )
@@ -71,15 +79,15 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"API sync completed | "
+                f"✔ API sync completed | "
                 f"Endpoints +{created_endpoints} | "
                 f"Operations +{created_operations}"
             )
         )
 
-    # -------------------------
+    # ─────────────────────────────
     # URL Collection
-    # -------------------------
+    # ─────────────────────────────
     def _collect_urlpatterns(self, patterns, urlpatterns, prefix):
         for pattern in patterns:
             if isinstance(pattern, URLPattern):
@@ -93,29 +101,21 @@ class Command(BaseCommand):
                     prefix + str(pattern.pattern)
                 )
 
-    # -------------------------
-    # Path Helpers
-    # -------------------------
+    # ─────────────────────────────
+    # Helpers
+    # ─────────────────────────────
     def _normalize_path(self, raw_path):
         return "/" + raw_path.lstrip("/")
 
-    # -------------------------
-    # Action Resolution
-    # -------------------------
-    def _resolve_actions(self, callback):
-        """
-        Detect actions for all view types:
-        - ViewSet / ModelViewSet
-        - APIView / GenericAPIView
-        - Django CBV
-        - Function-based views
-        """
-        actions = set()
+    def _should_skip_path(self, path: str) -> bool:
+        return any(path.startswith(p) for p in self.SKIP_PATH_PREFIXES)
 
-        # DRF ViewSet (router based)
+    def _resolve_http_methods(self, callback):
+        methods = set()
+
+        # DRF ViewSet
         if hasattr(callback, "actions"):
-            actions.update(callback.actions.values())
-            return actions
+            return {m.lower() for m in callback.actions.keys()}
 
         view_cls = getattr(callback, "cls", None)
 
@@ -123,39 +123,22 @@ class Command(BaseCommand):
         if view_cls and issubclass(view_cls, APIView):
             for method in view_cls.http_method_names:
                 if hasattr(view_cls, method):
-                    actions.add(method)
-            return actions
+                    methods.add(method)
+            return methods
 
-        # Django Class-Based View
+        # Django CBV
         if view_cls:
             for method in ("get", "post", "put", "patch", "delete"):
                 if hasattr(view_cls, method):
-                    actions.add(method)
-            return actions
+                    methods.add(method)
+            return methods
 
-        # Function-Based View
-        if callable(callback):
-            actions.add("get")  # safe fallback
-            return actions
+        # FBV fallback
+        return {"get"}
 
-        return actions
-
-    # -------------------------
-    # Action Helpers
-    # -------------------------
-    def _normalize_action(self, raw_action):
-        return self.HTTP_ACTION_MAP.get(raw_action, raw_action)
-
-    def _get_or_create_action(self, action_code):
-        action, _ = Action.objects.get_or_create(code=action_code)
-        return action
-
-    # -------------------------
-    # Defaults
-    # -------------------------
     def _get_default_module(self):
         module, _ = Module.objects.get_or_create(
-            name="Uncategorized"
+            code="SYSTEM",
+            defaults={"name": "System"},
         )
-        print("Module >>>", module)
         return module

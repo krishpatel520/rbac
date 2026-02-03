@@ -131,7 +131,7 @@ DATABASES = {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'rbac_project',
         'USER': 'postgres',
-        'PASSWORD': '1234',
+        'PASSWORD': 'msbc%123',
         'HOST': 'localhost',
         'PORT': '5432',
     }

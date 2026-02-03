@@ -27,11 +27,17 @@ class Role(models.Model):
     """
     Global role definition (e.g. Admin, SalesExecutive).
     """
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
-
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "admin_role"
+        unique_together = ('name', 'tenant')
+
+    def __str__(self):
+        return f"{self.name} ({self.tenant.name})"
 
     def delete(self, *args, **kwargs):
         """
@@ -41,12 +47,6 @@ class Role(models.Model):
             self.is_deleted = True
             self.deleted_at = timezone.now()
             self.save(update_fields=["is_deleted", "deleted_at"])
-
-    class Meta:
-        db_table = "admin_role"
-
-    def __str__(self):
-        return self.name
 
 
 # ----------------------------
