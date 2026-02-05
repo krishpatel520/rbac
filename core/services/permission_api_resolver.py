@@ -16,17 +16,43 @@ ALLOW = True
 # ─────────────────────────────
 
 def resolve_api_operation(request):
-    endpoint = ApiEndpoint.objects.filter(
-        path=request.path
-    ).first()
+    """
+    Resolve API operation by matching request path to registered endpoints.
+    Handles path parameters like {id}, {pk}, etc.
+    """
+    import re
+    
+    request_path = request.path
+    
+    # Try exact match first (fastest)
+    endpoint = ApiEndpoint.objects.filter(path=request_path).first()
+    
+    if endpoint:
+        return ApiOperation.objects.filter(
+            endpoint=endpoint,
+            http_method=request.method.upper(),
+        ).first()
+    
+    # Fall back to pattern matching for parameterized paths
+    # Get all endpoints and try to match them
+    all_endpoints = ApiEndpoint.objects.all()
+    
+    for endpoint in all_endpoints:
+        # Convert {id}, {pk}, etc. to regex pattern
+        # {id} -> (?P<id>[^/]+)
+        # {pk} -> (?P<pk>[^/]+)
+        pattern = endpoint.path
+        pattern = re.sub(r'\{(\w+)\}', r'(?P<\1>[^/]+)', pattern)
+        pattern = f'^{pattern}$'
+        
+        if re.match(pattern, request_path):
+            return ApiOperation.objects.filter(
+                endpoint=endpoint,
+                http_method=request.method.upper(),
+            ).first()
+    
+    return None
 
-    if not endpoint:
-        return None
-
-    return ApiOperation.objects.filter(
-        endpoint=endpoint,
-        http_method=request.method.upper(),
-    ).first()
 
 
 # ─────────────────────────────

@@ -1,40 +1,38 @@
-from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema
+from rest_framework import status
 
-from django.views.decorators.csrf import csrf_exempt
-
+from core.api.base import RBACViewSet
 from enquiry.models import Enquiry
 from enquiry.services import EnquiryService
 from enquiry.api.serializers import EnquirySerializer
 
 
-class EnquiryViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated]
+class EnquiryViewSet(RBACViewSet):
+    serializer_class = EnquirySerializer
+    
+    def get_queryset(self):
+        """Override to return fresh queryset and apply tenant filtering"""
+        # Get base queryset (fresh, not cached)
+        base_qs = Enquiry.objects.all()
+        
+        # Apply tenant filtering from RBACViewSet
+        tenant = self.request.user.tenant
+        return base_qs.filter(tenant=tenant)
 
-    @extend_schema(responses=EnquirySerializer(many=True))
     def list(self, request):
-        qs = Enquiry.objects.filter(tenant=request.user.tenant)
-        serializer = EnquirySerializer(qs, many=True)
+        serializer = self.get_serializer(self.get_queryset(), many=True)
         return Response(serializer.data)
 
-    @extend_schema(responses=EnquirySerializer)
     def retrieve(self, request, pk=None):
-        enquiry = Enquiry.objects.get(
-            pk=pk,
-            tenant=request.user.tenant,
-        )
-        return Response(EnquirySerializer(enquiry).data)
+        from django.shortcuts import get_object_or_404
+        enquiry = get_object_or_404(self.get_queryset(), pk=pk)
+        return Response(self.get_serializer(enquiry).data)
 
-    @extend_schema(
-        request=EnquirySerializer,
-        responses=EnquirySerializer,
-    )
-    @csrf_exempt
+
+
     def create(self, request):
-        serializer = EnquirySerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         enquiry = EnquiryService.create_enquiry(
@@ -43,36 +41,27 @@ class EnquiryViewSet(viewsets.ViewSet):
         )
 
         return Response(
-            EnquirySerializer(enquiry).data,
+            self.get_serializer(enquiry).data,
             status=status.HTTP_201_CREATED,
         )
 
-    @extend_schema(responses=EnquirySerializer)
     @action(detail=True, methods=["post"])
     def qualify(self, request, pk=None):
-        enquiry = Enquiry.objects.get(
-            pk=pk,
-            tenant=request.user.tenant,
-        )
+        from django.shortcuts import get_object_or_404
+        enquiry = get_object_or_404(self.get_queryset(), pk=pk)
         enquiry = EnquiryService.qualify(request.user, enquiry)
-        return Response(EnquirySerializer(enquiry).data)
+        return Response(self.get_serializer(enquiry).data)
 
-    @extend_schema(responses=EnquirySerializer)
     @action(detail=True, methods=["post"])
     def disqualify(self, request, pk=None):
-        enquiry = Enquiry.objects.get(
-            pk=pk,
-            tenant=request.user.tenant,
-        )
+        from django.shortcuts import get_object_or_404
+        enquiry = get_object_or_404(self.get_queryset(), pk=pk)
         enquiry = EnquiryService.disqualify(request.user, enquiry)
-        return Response(EnquirySerializer(enquiry).data)
+        return Response(self.get_serializer(enquiry).data)
 
-    @extend_schema(responses=EnquirySerializer)
     @action(detail=True, methods=["post"])
     def close(self, request, pk=None):
-        enquiry = Enquiry.objects.get(
-            pk=pk,
-            tenant=request.user.tenant,
-        )
+        from django.shortcuts import get_object_or_404
+        enquiry = get_object_or_404(self.get_queryset(), pk=pk)
         enquiry = EnquiryService.close(request.user, enquiry)
-        return Response(EnquirySerializer(enquiry).data)
+        return Response(self.get_serializer(enquiry).data)

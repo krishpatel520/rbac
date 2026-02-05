@@ -20,6 +20,7 @@ from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
 )
+from accounts.api.views import obtain_auth_token
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -29,12 +30,16 @@ urlpatterns = [
 
     # Authentication
     path('accounts/', include('accounts.urls')),
+    path('api/auth/token/', obtain_auth_token, name='api_token_auth'),  # Token authentication
 
     # OpenAPI schema
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
 
     # Swagger UI
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema')),
+
+    # Core / Demo API
+    path('api/core/', include('core.api.urls')),
 
     # Enquiry API
     path('api/', include('enquiry.api.urls')),

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from django.db import transaction
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 
 from quotation.models import Quotation, QuotationStatus
 from enquiry.models import Enquiry, EnquiryStatus
-from core.services.rbac import has_permission
-from core.services.rules import is_allowed
 from core.models import TenantModule
 
 
@@ -16,35 +14,21 @@ class QuotationService:
 
     Lifecycle:
         DRAFT → SENT
-        SENT  → ACCEPTED
-        SENT  → REJECTED
-        SENT  → EXPIRED
+        SENT → ACCEPTED or REJECTED or EXPIRED
     """
 
     # ─────────────────────────────
     # INTERNAL GUARDS
     # ─────────────────────────────
 
-    @staticmethod
-    def _check_permission(user, permission_code, obj=None):
-        if not has_permission(user, permission_code):
-            raise PermissionDenied("RBAC denied")
 
-        if not is_allowed(user, permission_code, obj):
-            raise PermissionDenied("ABAC rule denied")
 
     @staticmethod
     def _check_tenant(user, quotation: Quotation | None):
         if quotation and quotation.tenant_id != user.tenant_id:
             raise PermissionDenied("Cross-tenant access denied")
 
-    @staticmethod
-    def _check_subscription(user, module_code="quotation"):
-        return TenantModule.objects.filter(
-            tenant=user.tenant,
-            module__code=module_code,
-            is_enabled=True,
-        ).exists()
+
 
     @staticmethod
     def _check_enquiry(enquiry: Enquiry, user):
@@ -86,10 +70,7 @@ class QuotationService:
         - enquiry belongs to user's tenant
         - only one quotation per enquiry
         """
-        QuotationService._check_permission(user, "quotation.create")
 
-        if not QuotationService._check_subscription(user):
-            raise PermissionDenied("Module not enabled")
 
         QuotationService._check_enquiry(enquiry, user)
         QuotationService._check_existing_quotation(enquiry)
@@ -110,7 +91,6 @@ class QuotationService:
         Allowed only in DRAFT or SENT.
         """
         QuotationService._check_tenant(user, quotation)
-        QuotationService._check_permission(user, "quotation.update", quotation)
 
         for field, value in fields.items():
             setattr(quotation, field, value)
@@ -126,7 +106,13 @@ class QuotationService:
             DRAFT → SENT
         """
         QuotationService._check_tenant(user, quotation)
-        QuotationService._check_permission(user, "quotation.send", quotation)
+        
+        # State validation: Only DRAFT quotations can be sent
+        if quotation.status != QuotationStatus.DRAFT:
+            raise ValidationError(
+                f"Cannot send quotation in '{quotation.status}' status. "
+                f"Only DRAFT quotations can be sent."
+            )
 
         quotation.status = QuotationStatus.SENT
         quotation.save(update_fields=["status"])
@@ -140,7 +126,13 @@ class QuotationService:
             SENT → ACCEPTED
         """
         QuotationService._check_tenant(user, quotation)
-        QuotationService._check_permission(user, "quotation.accept", quotation)
+        
+        # State validation: Only SENT quotations can be accepted
+        if quotation.status != QuotationStatus.SENT:
+            raise ValidationError(
+                f"Cannot accept quotation in '{quotation.status}' status. "
+                f"Only SENT quotations can be accepted."
+            )
 
         quotation.status = QuotationStatus.ACCEPTED
         quotation.save(update_fields=["status"])
@@ -154,7 +146,13 @@ class QuotationService:
             SENT → REJECTED
         """
         QuotationService._check_tenant(user, quotation)
-        QuotationService._check_permission(user, "quotation.reject", quotation)
+        
+        # State validation: Only SENT quotations can be rejected
+        if quotation.status != QuotationStatus.SENT:
+            raise ValidationError(
+                f"Cannot reject quotation in '{quotation.status}' status. "
+                f"Only SENT quotations can be rejected."
+            )
 
         quotation.status = QuotationStatus.REJECTED
         quotation.save(update_fields=["status"])
@@ -170,7 +168,13 @@ class QuotationService:
         Used when the organization terminates a quotation.
         """
         QuotationService._check_tenant(user, quotation)
-        QuotationService._check_permission(user, "quotation.expire", quotation)
+        
+        # State validation: Only SENT quotations can be expired
+        if quotation.status != QuotationStatus.SENT:
+            raise ValidationError(
+                f"Cannot expire quotation in '{quotation.status}' status. "
+                f"Only SENT quotations can be expired."
+            )
 
         quotation.status = QuotationStatus.EXPIRED
         quotation.save(update_fields=["status"])

@@ -1,36 +1,41 @@
-from rest_framework import viewsets, status
+from rest_framework import status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from drf_spectacular.utils import extend_schema
 
+from core.api.base import RBACViewSet
 from quotation.models import Quotation
 from quotation.services import QuotationService
 from quotation.api.serializers import QuotationSerializer
 
 
-class QuotationViewSet(viewsets.ViewSet):
-    permission_classes = [IsAuthenticated]
+class QuotationViewSet(RBACViewSet):
+    serializer_class = QuotationSerializer
+    
+    def get_queryset(self):
+        """Override to return fresh queryset and apply tenant filtering"""
+        base_qs = Quotation.objects.all()
+        tenant = self.request.user.tenant
+        return base_qs.filter(tenant=tenant)
 
     @extend_schema(responses=QuotationSerializer(many=True))
     def list(self, request):
-        qs = Quotation.objects.filter(tenant=request.user.tenant)
-        return Response(QuotationSerializer(qs, many=True).data)
+        serializer = self.get_serializer(self.get_queryset(), many=True)
+        return Response(serializer.data)
+
 
     @extend_schema(responses=QuotationSerializer)
     def retrieve(self, request, pk=None):
-        quotation = Quotation.objects.get(
-            pk=pk,
-            tenant=request.user.tenant,
-        )
-        return Response(QuotationSerializer(quotation).data)
+        from django.shortcuts import get_object_or_404
+        quotation = get_object_or_404(self.get_queryset(), pk=pk)
+        return Response(self.get_serializer(quotation).data)
 
     @extend_schema(
         request=QuotationSerializer,
         responses=QuotationSerializer,
     )
     def create(self, request):
-        serializer = QuotationSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         quotation = QuotationService.create(
@@ -40,7 +45,7 @@ class QuotationViewSet(viewsets.ViewSet):
         )
 
         return Response(
-            QuotationSerializer(quotation).data,
+            self.get_serializer(quotation).data,
             status=status.HTTP_201_CREATED,
         )
 

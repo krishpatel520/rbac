@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from django.db import transaction
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 
 from followup.models import FollowUp, FollowUpStatus
 from enquiry.models import Enquiry, EnquiryStatus
-from core.services.rbac import has_permission
-from core.services.rules import is_allowed
 from core.models import TenantModule
 
 
@@ -23,26 +21,14 @@ class FollowUpService:
     # INTERNAL GUARDS
     # ─────────────────────────────
 
-    @staticmethod
-    def _check_permission(user, permission_code, obj=None):
-        if not has_permission(user, permission_code):
-            raise PermissionDenied("RBAC denied")
 
-        if not is_allowed(user, permission_code, obj):
-            raise PermissionDenied("ABAC rule denied")
 
     @staticmethod
     def _check_tenant(user, followup: FollowUp | None):
         if followup and followup.tenant_id != user.tenant_id:
             raise PermissionDenied("Cross-tenant access denied")
 
-    @staticmethod
-    def _check_subscription(user, module_code="followup"):
-        return TenantModule.objects.filter(
-            tenant=user.tenant,
-            module__code=module_code,
-            is_enabled=True,
-        ).exists()
+
 
     @staticmethod
     def _check_enquiry(enquiry: Enquiry, user):
@@ -78,10 +64,7 @@ class FollowUpService:
         - enquiry is QUALIFIED
         - enquiry belongs to user's tenant
         """
-        FollowUpService._check_permission(user, "followup.create")
 
-        if not FollowUpService._check_subscription(user):
-            raise PermissionDenied("Module not enabled")
 
         FollowUpService._check_enquiry(enquiry, user)
 
@@ -100,7 +83,13 @@ class FollowUpService:
             PENDING → COMPLETED
         """
         FollowUpService._check_tenant(user, followup)
-        FollowUpService._check_permission(user, "followup.complete", followup)
+        
+        # State validation: Only PENDING followups can be completed
+        if followup.status != FollowUpStatus.PENDING:
+            raise ValidationError(
+                f"Cannot complete followup in '{followup.status}' status. "
+                f"Only PENDING followups can be completed."
+            )
 
         followup.status = FollowUpStatus.COMPLETED
         followup.save(update_fields=["status"])
@@ -114,7 +103,13 @@ class FollowUpService:
             PENDING → CANCELED
         """
         FollowUpService._check_tenant(user, followup)
-        FollowUpService._check_permission(user, "followup.cancel", followup)
+        
+        # State validation: Only PENDING followups can be canceled
+        if followup.status != FollowUpStatus.PENDING:
+            raise ValidationError(
+                f"Cannot cancel followup in '{followup.status}' status. "
+                f"Only PENDING followups can be canceled."
+            )
 
         followup.status = FollowUpStatus.CANCELED
         followup.save(update_fields=["status"])

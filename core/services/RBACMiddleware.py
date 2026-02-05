@@ -28,6 +28,8 @@ class RBACMiddleware:
         "/static/",
         "/media/",
         "/favicon.ico",
+        "/api/schema/",  # OpenAPI schema endpoint
+        "/api/docs/",    # Swagger UI
     )
 
     def __init__(self, get_response):
@@ -109,6 +111,9 @@ class RBACMiddleware:
         # 7️⃣ Permission resolution
         # ─────────────────────────────
         permissions = get_user_permissions(tenant, user)
+        
+        print(f"DEBUG: User permissions: {permissions}")
+        print(f"DEBUG: Checking module={operation.endpoint.module.code}, submodule={operation.endpoint.submodule.code if operation.endpoint.submodule else None}, action={operation.action.code}")
 
         # Module-level permission
         if has_permission(
@@ -117,6 +122,7 @@ class RBACMiddleware:
             submodule=None,
             action=operation.action,
         ):
+            print("DEBUG: ALLOWED via module-level permission")
             return self.get_response(request)
 
         # Submodule-level permission (fallback)
@@ -129,9 +135,12 @@ class RBACMiddleware:
                 action=operation.action,
             )
         ):
+            print("DEBUG: ALLOWED via submodule-level permission")
             return self.get_response(request)
 
         # ─────────────────────────────
         # 8️⃣ Final deny
         # ─────────────────────────────
+        print("DEBUG: DENIED - No matching permission found")
         raise PermissionError("Permission denied")
+

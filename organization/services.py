@@ -1,9 +1,8 @@
 from django.db import transaction
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 
 from organization.models import OrganizationProfile, OrganizationStatus
-from core.services.rbac import has_permission
-from core.services.rules import is_allowed
+
 
 
 class OrganizationService:
@@ -11,20 +10,14 @@ class OrganizationService:
     Domain service owning Organization lifecycle.
 
     Lifecycle:
-        ACTIVE <-> SUSPENDED -> ARCHIVED
+        ACTIVE <-> ARCHIVED -> SUSPENDED
     """
 
     # ─────────────────────────────
     # INTERNAL GUARDS
     # ─────────────────────────────
 
-    @staticmethod
-    def _check_permission(user, permission_code, obj=None):
-        if not has_permission(user, permission_code):
-            raise PermissionDenied("RBAC denied")
 
-        if not is_allowed(user, permission_code, obj):
-            raise PermissionDenied("ABAC rule denied")
 
     @staticmethod
     def _check_tenant(user, org: OrganizationProfile):
@@ -61,7 +54,6 @@ class OrganizationService:
         Allowed only when ACTIVE.
         """
         OrganizationService._check_tenant(user, org)
-        OrganizationService._check_permission(user, "organization.update", org)
 
         for field, value in fields.items():
             setattr(org, field, value)
@@ -71,27 +63,39 @@ class OrganizationService:
 
     @staticmethod
     @transaction.atomic
-    def suspend(user, org: OrganizationProfile):
+    def archive(user, org: OrganizationProfile):
         """
         Transition:
-            ACTIVE -> SUSPENDED
+            ACTIVE → ARCHIVED
         """
         OrganizationService._check_tenant(user, org)
-        OrganizationService._check_permission(user, "organization.suspend", org)
+        
+        # State validation: Only ACTIVE organizations can be archived
+        if org.status != OrganizationStatus.ACTIVE:
+            raise ValidationError(
+                f"Cannot archive organization in '{org.status}' status. "
+                f"Only ACTIVE organizations can be archived."
+            )
 
-        org.status = OrganizationStatus.SUSPENDED
+        org.status = OrganizationStatus.ARCHIVED
         org.save(update_fields=["status"])
         return org
 
     @staticmethod
     @transaction.atomic
-    def activate(user, org: OrganizationProfile):
+    def unarchive(user, org: OrganizationProfile):
         """
         Transition:
-            SUSPENDED -> ACTIVE
+            ARCHIVED → ACTIVE
         """
         OrganizationService._check_tenant(user, org)
-        OrganizationService._check_permission(user, "organization.activate", org)
+        
+        # State validation: Only ARCHIVED organizations can be unarchived
+        if org.status != OrganizationStatus.ARCHIVED:
+            raise ValidationError(
+                f"Cannot unarchive organization in '{org.status}' status. "
+                f"Only ARCHIVED organizations can be unarchived."
+            )
 
         org.status = OrganizationStatus.ACTIVE
         org.save(update_fields=["status"])
@@ -99,14 +103,20 @@ class OrganizationService:
 
     @staticmethod
     @transaction.atomic
-    def archive(user, org: OrganizationProfile):
+    def suspend(user, org: OrganizationProfile):
         """
         Transition:
-            ACTIVE/SUSPENDED -> ARCHIVED
+            ARCHIVED → SUSPENDED
         """
         OrganizationService._check_tenant(user, org)
-        OrganizationService._check_permission(user, "organization.archive", org)
+        
+        # State validation: Only ARCHIVED organizations can be suspended
+        if org.status != OrganizationStatus.ARCHIVED:
+            raise ValidationError(
+                f"Cannot suspend organization in '{org.status}' status. "
+                f"Only ARCHIVED organizations can be suspended."
+            )
 
-        org.status = OrganizationStatus.ARCHIVED
+        org.status = OrganizationStatus.SUSPENDED
         org.save(update_fields=["status"])
         return org

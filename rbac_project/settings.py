@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
+    'rest_framework.authtoken',  # Token authentication support
     'drf_spectacular',
 
     # Project apps
@@ -53,6 +54,10 @@ INSTALLED_APPS = [
 
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',  # Try token first
+        'rest_framework.authentication.SessionAuthentication',  # Fallback to session
+    ],
 }
 
 
@@ -61,6 +66,26 @@ SPECTACULAR_SETTINGS = {
     'DESCRIPTION': 'Multi-tenant RBAC + ABAC API',
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
+    'SECURITY': [
+        {'tokenAuth': []},
+        {'cookieAuth': []},
+    ],
+    'APPEND_COMPONENTS': {
+        'securitySchemes': {
+            'tokenAuth': {
+                'type': 'apiKey',
+                'in': 'header',
+                'name': 'Authorization',
+                'description': 'Token-based authentication. Format: `Token <your-token-here>`'
+            },
+            'cookieAuth': {
+                'type': 'apiKey',
+                'in': 'cookie',
+                'name': 'sessionid',
+                'description': 'Session-based authentication (existing)'
+            }
+        }
+    },
 }
 
 # Custom user model

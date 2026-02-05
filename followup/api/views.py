@@ -1,42 +1,33 @@
-from rest_framework import viewsets, status
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from drf_spectacular.utils import extend_schema
+from rest_framework import status
 
+from core.api.base import RBACViewSet
 from followup.models import FollowUp
 from followup.services import FollowUpService
 from followup.api.serializers import FollowUpSerializer
 from enquiry.models import Enquiry
 
 
-class FollowUpViewSet(viewsets.ViewSet):
-    """
-    REST-style FollowUp API
-    """
+class FollowUpViewSet(RBACViewSet):
+    serializer_class = FollowUpSerializer
+    
+    def get_queryset(self):
+        """Override to return fresh queryset and apply tenant filtering"""
+        base_qs = FollowUp.objects.all()
+        tenant = self.request.user.tenant
+        return base_qs.filter(tenant=tenant)
 
-    permission_classes = [IsAuthenticated]
-
-    @extend_schema(responses=FollowUpSerializer(many=True))
     def list(self, request):
-        qs = FollowUp.objects.filter(tenant=request.user.tenant)
-        serializer = FollowUpSerializer(qs, many=True)
+        serializer = self.get_serializer(self.get_queryset(), many=True)
         return Response(serializer.data)
 
-    @extend_schema(responses=FollowUpSerializer)
     def retrieve(self, request, pk=None):
-        followup = FollowUp.objects.get(
-            pk=pk,
-            tenant=request.user.tenant,
-        )
-        return Response(FollowUpSerializer(followup).data)
+        followup = self.get_queryset().get(pk=pk)
+        return Response(self.get_serializer(followup).data)
 
-    @extend_schema(
-        request=FollowUpSerializer,
-        responses=FollowUpSerializer,
-    )
     def create(self, request):
-        serializer = FollowUpSerializer(data=request.data)
+        serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
         enquiry = Enquiry.objects.get(
@@ -51,26 +42,18 @@ class FollowUpViewSet(viewsets.ViewSet):
         )
 
         return Response(
-            FollowUpSerializer(followup).data,
+            self.get_serializer(followup).data,
             status=status.HTTP_201_CREATED,
         )
 
-    @extend_schema(responses=FollowUpSerializer)
     @action(detail=True, methods=["post"])
     def complete(self, request, pk=None):
-        followup = FollowUp.objects.get(
-            pk=pk,
-            tenant=request.user.tenant,
-        )
+        followup = self.get_queryset().get(pk=pk)
         followup = FollowUpService.complete(request.user, followup)
-        return Response(FollowUpSerializer(followup).data)
+        return Response(self.get_serializer(followup).data)
 
-    @extend_schema(responses=FollowUpSerializer)
     @action(detail=True, methods=["post"])
     def cancel(self, request, pk=None):
-        followup = FollowUp.objects.get(
-            pk=pk,
-            tenant=request.user.tenant,
-        )
+        followup = self.get_queryset().get(pk=pk)
         followup = FollowUpService.cancel(request.user, followup)
-        return Response(FollowUpSerializer(followup).data)
+        return Response(self.get_serializer(followup).data)
