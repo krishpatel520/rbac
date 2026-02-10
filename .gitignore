@@ -33,3 +33,10 @@ staticfiles/
 # OS
 .DS_Store
 Thumbs.db
+
+# Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg

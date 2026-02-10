@@ -2,7 +2,11 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.conf import settings
 
-from core.models import Tenant, Role, ApiOperation
+from core.models import Role, ApiOperation
+
+# Configure RBAC_TENANT_MODEL - defaults to 'core.Tenant' if not set
+if not hasattr(settings, 'RBAC_TENANT_MODEL'):
+    settings.RBAC_TENANT_MODEL = 'core.Tenant'
 
 
 class UserManager(BaseUserManager):
@@ -53,7 +57,7 @@ class User(AbstractUser):
     Each user belongs to exactly one tenant.
     """
     tenant = models.ForeignKey(
-        Tenant,
+        settings.RBAC_TENANT_MODEL,
         blank=False,
         null=True,
         on_delete=models.PROTECT,
@@ -94,8 +98,14 @@ class UserRole(models.Model):
 
 
 class UserApiBlock(models.Model):
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(
+        settings.RBAC_TENANT_MODEL,
+        on_delete=models.CASCADE
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE
+    )
     api_operation = models.ForeignKey(ApiOperation, on_delete=models.CASCADE)
     reason = models.TextField(null=True, blank=True)
 

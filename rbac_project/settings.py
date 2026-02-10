@@ -44,11 +44,11 @@ INSTALLED_APPS = [
     'accounts',
     'core',
 
-    # Domain modules (ERP)
-    'organization',
-    'enquiry',
-    'followup',
-    'quotation',
+    # Domain modules (ERP) - Commented out as they don't exist yet
+    # 'organization',
+    # 'enquiry',
+    # 'followup',
+    # 'quotation',
 ]
 
 
@@ -58,6 +58,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.TokenAuthentication',  # Try token first
         'rest_framework.authentication.SessionAuthentication',  # Fallback to session
     ],
+    'EXCEPTION_HANDLER': 'core.drf_exception_handler.custom_exception_handler',
 }
 
 
@@ -108,7 +109,10 @@ MIDDLEWARE = [
 
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.services.RBACMiddleware.RBACMiddleware'
+    'core.services.RBACMiddleware.RBACMiddleware',
+    
+    # 🔧 JSON Exception Handler (MUST be last to catch all exceptions)
+    'core.exception_middleware.JSONExceptionMiddleware',
 ]
 
 

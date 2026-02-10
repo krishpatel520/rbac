@@ -34,8 +34,9 @@ class TenantModuleAdmin(admin.ModelAdmin):
 
 @admin.register(Role)
 class RoleAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "is_deleted")
-    search_fields = ("name",)
+    list_display = ("id", "name", "tenant", "is_deleted")
+    list_filter = ("tenant", "is_deleted")
+    search_fields = ("name", "tenant__name")
 
     def delete_model(self, request, obj):
         # Preserve soft-delete semantics
@@ -54,9 +55,16 @@ class PermissionAdmin(admin.ModelAdmin):
 
 @admin.register(RolePermission)
 class RolePermissionAdmin(admin.ModelAdmin):
-    list_display = ("role", "permission", "allowed")
-    list_filter = ("role", "allowed")
+    list_display = ("role", "get_tenant", "permission", "allowed")
+    list_filter = ("role__tenant", "allowed")
+    search_fields = ("role__name", "role__tenant__name")
     autocomplete_fields = ("role", "permission")
+
+    def get_tenant(self, obj):
+        """Display tenant from the related role."""
+        return obj.role.tenant
+    get_tenant.short_description = "Tenant"
+    get_tenant.admin_order_field = "role__tenant"
 
 
 @admin.register(UserRole)

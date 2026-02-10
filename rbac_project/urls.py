@@ -41,15 +41,31 @@ urlpatterns = [
     # Core / Demo API
     path('api/core/', include('core.api.urls')),
 
-    # Enquiry API
-    path('api/', include('enquiry.api.urls')),
+    # Enquiry API - Commented out as they don't exist yet
+    # path('api/', include('enquiry.api.urls')),
 
     # FollowUp API
-    path('api/', include('followup.api.urls')),
+    # path('api/', include('followup.api.urls')),
 
     # Organization API
-    path('api/', include('organization.api.urls')),
+    # path('api/', include('organization.api.urls')),
 
     # Quotation API
-    path('api/', include('quotation.api.urls')),
+    # path('api/', include('quotation.api.urls')),
 ]
+
+# ------------------------------------------------------------------------------
+# Custom Error Handlers (JSON responses)
+# ------------------------------------------------------------------------------
+from core.error_handlers import (
+    json_404_handler,
+    json_500_handler,
+    json_400_handler,
+    json_403_handler,
+)
+
+handler404 = json_404_handler
+handler500 = json_500_handler
+handler400 = json_400_handler
+handler403 = json_403_handler
+

@@ -2,6 +2,11 @@ from django.db import models
 from django.conf import settings
 from django.utils import timezone
 
+# Configure RBAC_TENANT_MODEL - defaults to 'core.Tenant' if not set
+# Override in your Django settings.py with: RBAC_TENANT_MODEL = 'your_app.YourTenantModel'
+if not hasattr(settings, 'RBAC_TENANT_MODEL'):
+    settings.RBAC_TENANT_MODEL = 'core.Tenant'
+
 
 # ----------------------------
 # Tenant
@@ -28,13 +33,17 @@ class Role(models.Model):
     Global role definition (e.g. Admin, SalesExecutive).
     """
     name = models.CharField(max_length=100)
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(
+        settings.RBAC_TENANT_MODEL,
+        on_delete=models.CASCADE
+    )
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "admin_role"
         unique_together = ('name', 'tenant')
+        # Note: When using swappable models, migrations may need to be regenerated
 
     def __str__(self):
         return f"{self.name} ({self.tenant.name})"
@@ -112,7 +121,7 @@ class ModuleSubModuleMapping(models.Model):
 
 class TenantModule(models.Model):
     tenant = models.ForeignKey(
-        Tenant,
+        settings.RBAC_TENANT_MODEL,
         on_delete=models.CASCADE,
         related_name="modules",
     )
@@ -140,7 +149,10 @@ class TenantModule(models.Model):
         return f"{self.tenant} → {self.module}"
 
 class Permission(models.Model):
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(
+        settings.RBAC_TENANT_MODEL,
+        on_delete=models.CASCADE
+    )
     tenant_module = models.ForeignKey(TenantModule, on_delete=models.CASCADE)
     action = models.ForeignKey(Action, on_delete=models.CASCADE)
 
@@ -198,7 +210,10 @@ class ApiOperation(models.Model):
         unique_together = ('endpoint', 'http_method')
 
 class TenantApiOverride(models.Model):
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(
+        settings.RBAC_TENANT_MODEL,
+        on_delete=models.CASCADE
+    )
     api_operation = models.ForeignKey(ApiOperation, on_delete=models.CASCADE)
     is_enabled = models.BooleanField(default=True)
 
