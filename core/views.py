@@ -3,6 +3,10 @@ from django.shortcuts import render
 
 from core.models import TenantModule, Permission, TenantApiOverride, Role
 from accounts.models import UserApiBlock
+from core.serializers import serialize_tenant_modules
+from core.services.sidebar_context import build_sidebar_context
+
+
 # from core.utils import get_user_allowed_actions, get_user_access, build_access_tree # Deleted
 
 
@@ -143,4 +147,13 @@ def perm_flags(perms):
         "update": any(".update" in p for p in perms),
         "delete": any(".delete" in p for p in perms),
         "approve": any(".approve" in p for p in perms),
+    }
+
+
+def sidebar_context(request):
+    if not request.user.is_authenticated:
+        return {}
+
+    return {
+        "sidebar_modules": build_sidebar_context(request.user)
     }
