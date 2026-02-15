@@ -17,7 +17,6 @@ from django.db import transaction
 from core.models import (
     ApiEndpoint,
     ApiOperation,
-    Action,
     Module,
     SubModule,
 )
@@ -214,9 +213,7 @@ class Command(BaseCommand):
         self.stdout.write("-" * 80)
         
         # Get or create UPDATE and DELETE actions
-        update_action, _ = Action.objects.get_or_create(code='update')
-        delete_action, _ = Action.objects.get_or_create(code='delete')
-        
+
         # Find detail endpoints (containing {id})
         all_endpoints = ApiEndpoint.objects.all()
         
@@ -239,7 +236,7 @@ class Command(BaseCommand):
                 endpoint=endpoint,
                 http_method='PUT',
                 defaults={
-                    'action': update_action,
+
                     'is_enabled': True,
                 }
             )
@@ -254,7 +251,6 @@ class Command(BaseCommand):
                 endpoint=endpoint,
                 http_method='PATCH',
                 defaults={
-                    'action': update_action,
                     'is_enabled': True,
                 }
             )
@@ -270,7 +266,6 @@ class Command(BaseCommand):
                 endpoint=endpoint,
                 http_method='DELETE',
                 defaults={
-                    'action': delete_action,
                     'is_enabled': True,
                 }
             )
@@ -291,28 +286,24 @@ class Command(BaseCommand):
         self.stdout.write("-" * 80)
         
         try:
-            read_action = Action.objects.get(code='read')
-            
+
             # Check if it's used
-            usage_count = ApiOperation.objects.filter(action=read_action).count()
+            usage_count = ApiOperation.objects.filter().count()
             
             if usage_count == 0:
                 self.stdout.write(
                     f"  {self.style.WARNING('REMOVE')}: Action 'read' (unused)"
                 )
                 
-                if not self.dry_run:
-                    read_action.delete()
-                
+
                 self.stats['actions_removed'] += 1
             else:
                 self.stdout.write(
                     f"  ⚠ Action 'read' is used by {usage_count} operations - keeping it"
                 )
-        
-        except Action.DoesNotExist:
-            self.stdout.write("  ✓ Action 'read' does not exist")
-        
+        except :
+            print("Error")
+
         self.stdout.write(
             self.style.SUCCESS(f"\n✓ Removed {self.stats['actions_removed']} unused actions")
         )

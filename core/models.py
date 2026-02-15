@@ -103,11 +103,24 @@ class SubModule(models.Model):
     def __str__(self):
         return self.name
 
-class Action(models.Model):
-    code = models.CharField(max_length=20, unique=True)
+# class Action(models.Model):
+#     code = models.CharField(max_length=20, unique=True)
+#
+#     class Meta:
+#         db_table = "admin_action"
+
+class Permission(models.Model):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    module = models.ForeignKey(Module, on_delete=models.CASCADE)
+    submodule = models.ForeignKey(SubModule, null=True, blank=True, on_delete=models.CASCADE)
+
+    code = models.CharField(max_length=150)  # invoice.read, user.block
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
-        db_table = "admin_action"
+        db_table = 'admin_permission'
+        unique_together = ("tenant", "module", "submodule", "code")
 
 
 class ModuleSubModuleMapping(models.Model):
@@ -148,17 +161,6 @@ class TenantModule(models.Model):
     def __str__(self):
         return f"{self.tenant} → {self.module}"
 
-class Permission(models.Model):
-    tenant = models.ForeignKey(
-        settings.RBAC_TENANT_MODEL,
-        on_delete=models.CASCADE
-    )
-    tenant_module = models.ForeignKey(TenantModule, on_delete=models.CASCADE)
-    action = models.ForeignKey(Action, on_delete=models.CASCADE)
-
-    class Meta:
-        db_table = "admin_permission"
-        unique_together = ('tenant', 'tenant_module', 'action')
 
 # ----------------------------
 # Role ↔ Permission (GLOBAL)
@@ -202,12 +204,21 @@ class ApiEndpoint(models.Model):
 class ApiOperation(models.Model):
     endpoint = models.ForeignKey(ApiEndpoint, on_delete=models.CASCADE)
     http_method = models.CharField(max_length=10)
-    action = models.ForeignKey(Action, on_delete=models.CASCADE)
     is_enabled = models.BooleanField(default=True)
 
     class Meta:
         db_table = "admin_api_operation"
         unique_together = ('endpoint', 'http_method')
+
+class TenantApiPermission(models.Model):
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
+    api_operation = models.ForeignKey(ApiOperation, on_delete=models.CASCADE)
+    permission = models.ForeignKey(Permission, on_delete=models.CASCADE)
+    is_enabled = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ("tenant", "api_operation")
+
 
 class TenantApiOverride(models.Model):
     tenant = models.ForeignKey(

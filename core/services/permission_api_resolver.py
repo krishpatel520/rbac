@@ -1,58 +1,41 @@
 from accounts.models import UserApiBlock
-from core.models import (
-    ApiEndpoint,
-    ApiOperation,
-    TenantApiOverride,
-    ModuleSubModuleMapping,
-    Permission,
-)
+from core.models import ApiEndpoint, ApiOperation, TenantApiOverride, Permission
+import re
+
+from core.rbac.constants import HTTP_METHOD_ACTION_MAP
 
 DENY = False
 ALLOW = True
 
 
+
+
 # ─────────────────────────────
 # API resolution
 # ─────────────────────────────
-
 def resolve_api_operation(request):
     """
-    Resolve API operation by matching request path to registered endpoints.
-    Handles path parameters like {id}, {pk}, etc.
+    Resolve API operation by matching request path + method.
+    Supports parameterized URLs like /leads/{id}/
     """
-    import re
-    
-    request_path = request.path
-    
-    # Try exact match first (fastest)
-    endpoint = ApiEndpoint.objects.filter(path=request_path).first()
-    
-    if endpoint:
-        return ApiOperation.objects.filter(
-            endpoint=endpoint,
-            http_method=request.method.upper(),
-        ).first()
-    
-    # Fall back to pattern matching for parameterized paths
-    # Get all endpoints and try to match them
-    all_endpoints = ApiEndpoint.objects.all()
-    
-    for endpoint in all_endpoints:
-        # Convert {id}, {pk}, etc. to regex pattern
-        # {id} -> (?P<id>[^/]+)
-        # {pk} -> (?P<pk>[^/]+)
-        pattern = endpoint.path
-        pattern = re.sub(r'\{(\w+)\}', r'(?P<\1>[^/]+)', pattern)
-        pattern = f'^{pattern}$'
-        
-        if re.match(pattern, request_path):
-            return ApiOperation.objects.filter(
-                endpoint=endpoint,
-                http_method=request.method.upper(),
-            ).first()
-    
-    return None
 
+    request_path = request.path.rstrip("/")
+    method = request.method.upper()
+
+    # 1️⃣ Exact match first
+    endpoint = ApiEndpoint.objects.filter(path=request_path).first()
+    if endpoint:
+        return ApiOperation.objects.filter(endpoint=endpoint, http_method=method).first()
+
+    # 2️⃣ Pattern match
+    for endpoint in ApiEndpoint.objects.all():
+        pattern = re.sub(r'\{(\w+)\}', r'[^/]+', endpoint.path)
+        pattern = f'^{pattern.rstrip("/")}$'
+
+        if re.match(pattern, request_path):
+            return ApiOperation.objects.filter(endpoint=endpoint, http_method=method).first()
+
+    return None
 
 
 # ─────────────────────────────
@@ -82,28 +65,22 @@ def user_api_blocked(tenant, user, operation):
 
 def get_user_permissions(tenant, user):
     """
-    Returns a set of permission tuples:
-    (module_code, submodule_code | None, action_id)
-    
-    Join path: Permission → RolePermission → Role → UserRole → User
-    Note: Module and SubModule use 'code' as primary key, not 'id'
+    Returns permission tuples:
+    (module_code, submodule_code, action_code)
     """
 
     qs = (
         Permission.objects.filter(
             tenant=tenant,
-            roles__role__role_users__user=user,  # Fixed: role_users not user_roles
+            roles__role__role_users__user=user,
             roles__allowed=True,
+            is_active=True,
         )
-        .select_related(
-            "tenant_module__module",
-            "tenant_module__submodule",
-            "action",
-        )
+        .select_related("tenant_module__module", "tenant_module__submodule")
         .values_list(
-            "tenant_module__module__code",      # Use code, not id
-            "tenant_module__submodule__code",   # Use code, not id
-            "action_id",
+            "tenant_module__module__code",
+            "tenant_module__submodule__code",
+            "code",
         )
         .distinct()
     )
@@ -118,9 +95,9 @@ def has_permission(permissions, module, submodule, action):
     Note: Module and SubModule use 'code' as primary key, not 'id'
     """
     key = (
-        module.code,  # Module uses code as PK
-        submodule.code if submodule else None,  # SubModule uses code as PK
-        action.id,
+        module.code,
+        submodule.code if submodule else None,
+        action,
     )
     return key in permissions
 
@@ -145,21 +122,16 @@ def check_user_permission(request):
 
     permissions = get_user_permissions(tenant, user)
 
-    # Module-level permission
-    if has_permission(
-        permissions,
-        module=operation.endpoint.module,
-        submodule=None,
-        action=operation.action,
-    ):
+    action_code = HTTP_METHOD_ACTION_MAP.get(operation.http_method, "view")
+    endpoint = operation.endpoint
+
+    # Module level
+    if has_permission(permissions, endpoint.module, None, action_code):
         return ALLOW
 
-    # Submodule-level permission
-    if operation.endpoint.submodule and has_permission(
-        permissions,
-        module=operation.endpoint.module,
-        submodule=operation.endpoint.submodule,
-        action=operation.action,
+    # Submodule level
+    if endpoint.submodule and has_permission(
+        permissions, endpoint.module, endpoint.submodule, action_code
     ):
         return ALLOW
 
