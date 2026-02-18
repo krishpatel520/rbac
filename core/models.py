@@ -81,12 +81,15 @@ class Module(models.Model):
     """
     code = models.CharField(primary_key=True,max_length=50, unique = True)
     name = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50, blank=True, default="")
+    order = models.IntegerField(default=0)
 
     def __str__(self):
         return self.name
 
     class Meta:
         db_table = "admin_module"
+        ordering = ['order', 'name']
 
 
 class SubModule(models.Model):
@@ -96,9 +99,12 @@ class SubModule(models.Model):
     """
     code = models.CharField(primary_key=True,max_length=50, unique=True)
     name = models.CharField(max_length=100)
+    icon = models.CharField(max_length=50, blank=True, default="")
+    order = models.IntegerField(default=0)
 
     class Meta:
         db_table = "admin_sub_module"
+        ordering = ['order', 'name']
 
     def __str__(self):
         return self.name
@@ -110,11 +116,11 @@ class SubModule(models.Model):
 #         db_table = "admin_action"
 
 class Permission(models.Model):
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
-    module = models.ForeignKey(Module, on_delete=models.CASCADE)
+    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True)
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, null=True)
     submodule = models.ForeignKey(SubModule, null=True, blank=True, on_delete=models.CASCADE)
 
-    code = models.CharField(max_length=150)  # invoice.read, user.block
+    code = models.CharField(max_length=150, null=True)  # invoice.read, user.block
     description = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
 
@@ -124,7 +130,7 @@ class Permission(models.Model):
 
 
 class ModuleSubModuleMapping(models.Model):
-    module = models.ForeignKey(Module, on_delete=models.CASCADE)
+    module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name="submodules")
     submodule = models.ForeignKey(SubModule, on_delete=models.CASCADE)
 
     class Meta:
@@ -205,6 +211,7 @@ class ApiOperation(models.Model):
     endpoint = models.ForeignKey(ApiEndpoint, on_delete=models.CASCADE)
     http_method = models.CharField(max_length=10)
     is_enabled = models.BooleanField(default=True)
+    permission_code = models.CharField(max_length=50, null=True, blank=True)
 
     class Meta:
         db_table = "admin_api_operation"

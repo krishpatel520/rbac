@@ -2,6 +2,7 @@ from django.core.management.base import BaseCommand
 from django.apps import apps
 from django.urls import get_resolver, URLPattern, URLResolver
 from rest_framework.views import APIView
+import re
 
 from core.models import ApiEndpoint, ApiOperation, Module, SubModule
 
@@ -36,8 +37,7 @@ class Command(BaseCommand):
         self._collect_urlpatterns(resolver.url_patterns, urlpatterns, "")
 
         system_module = self._get_or_create_module("SYSTEM", "System")
-        system_submodule = None
-
+        
         created_endpoints = 0
         created_operations = 0
         updated_module_map = 0
@@ -53,7 +53,7 @@ class Command(BaseCommand):
 
             if not module_obj:
                 module_obj = system_module
-                submodule_obj = system_submodule
+                submodule_obj = None
 
             # Create endpoint
             endpoint, ep_created = ApiEndpoint.objects.get_or_create(
@@ -76,11 +76,24 @@ class Command(BaseCommand):
             if ep_created:
                 created_endpoints += 1
 
-            # Resolve HTTP methods
-            methods = self._resolve_http_methods(callback)
+            # Resolve methods and action names
+            actions_map = self._resolve_actions(callback)
 
-            for method in methods:
-                permission_code = self.HTTP_ACTION_MAP.get(method, method)
+            for method, action_name in actions_map.items():
+                std_action = action_name
+                if action_name in ['list', 'retrieve']:
+                    std_action = 'view'
+                elif action_name in ['create']:
+                    std_action = 'create'
+                elif action_name in ['update', 'partial_update']:
+                    std_action = 'update'
+                elif action_name in ['destroy']:
+                    std_action = 'delete'
+                
+                # Format: submodule.action (e.g., enquiry.view, enquiry.qualify)
+                permission_code = std_action
+                if submodule_obj:
+                    permission_code = f"{submodule_obj.code.lower()}.{std_action}"
 
                 _, created = ApiOperation.objects.get_or_create(
                     endpoint=endpoint,
@@ -101,21 +114,16 @@ class Command(BaseCommand):
             f"Module mappings updated: {updated_module_map}"
         ))
 
-    # ─────────────────────────────
-    # URL Collector
-    # ─────────────────────────────
     def _collect_urlpatterns(self, patterns, urlpatterns, prefix):
         for pattern in patterns:
             if isinstance(pattern, URLPattern):
+                # pattern.pattern is usually a regex or a path object
                 urlpatterns.append((prefix + str(pattern.pattern), pattern.callback))
             elif isinstance(pattern, URLResolver):
                 self._collect_urlpatterns(
                     pattern.url_patterns, urlpatterns, prefix + str(pattern.pattern)
                 )
 
-    # ─────────────────────────────
-    # Module Resolver from apps.py
-    # ─────────────────────────────
     def _resolve_module_from_callback(self, callback):
         """
         Detect Django app from callback and read RBAC_MODULE / RBAC_SUBMODULE
@@ -133,7 +141,6 @@ class Command(BaseCommand):
         if not app_config:
             return None, None
 
-        # Default: submodule = app label
         submodule_code = getattr(app_config, "RBAC_SUBMODULE", app_config.label.upper())
         module_code = getattr(app_config, "RBAC_MODULE", None)
 
@@ -145,32 +152,50 @@ class Command(BaseCommand):
 
         return module_obj, submodule_obj
 
-    # ─────────────────────────────
-    # Helpers
-    # ─────────────────────────────
-
     def _normalize_path(self, raw_path):
-        path = "/" + raw_path.lstrip("/")
-        return path.replace("<int:", "{").replace("<str:", "{").replace(">", "}")
+        """
+        Convert Django/DRF path patterns to RBAC standard {pk} format.
+        """
+        path = raw_path
+        
+        # 1. Strip regex start/end markers
+        if path.startswith('^'): path = path[1:]
+        if path.endswith('$'): path = path[:-1]
+        
+        # 2. Handle named groups like (?P<pk>[^/.]+) -> {pk}
+        path = re.sub(r'\(\?P<(\w+)>[^)]+\)', r'{\1}', path)
+        
+        # 3. Handle <int:pk> or <pk>
+        path = re.sub(r'<\w+:(\w+)>', r'{\1}', path)
+        path = re.sub(r'<(\w+)>', r'{\1}', path)
+        
+        # 4. Strip format extension (.?P<format>[a-z0-9]+)/?
+        path = re.sub(r'\.?\(\?P<format>[^)]+\)/\?', '', path)
+        path = re.sub(r'\.{\w+}', '', path) # remove .{format}
+        
+        # 5. Clean up escapes and ensure leading slash
+        path = path.replace('\\', '')
+        if not path.startswith('/'): path = '/' + path
+        
+        # 6. Final rstrip
+        return path.rstrip("/") if path != "/" else "/"
+
+    def _resolve_actions(self, callback):
+        if hasattr(callback, "actions"):
+            return callback.actions
+        
+        view_cls = getattr(callback, "cls", None)
+        if view_cls:
+            res = {}
+            for m in ['get', 'post', 'put', 'patch', 'delete']:
+                if hasattr(view_cls, m):
+                    res[m] = self.HTTP_ACTION_MAP.get(m, m)
+            return res
+
+        return {'get': 'view'}
 
     def _should_skip_path(self, path):
         return any(path.startswith(p) for p in self.SKIP_PATH_PREFIXES)
-
-    def _resolve_http_methods(self, callback):
-        methods = set()
-
-        if hasattr(callback, "actions"):
-            return {m.lower() for m in callback.actions.keys()}
-
-        view_cls = getattr(callback, "cls", None)
-
-        if view_cls and issubclass(view_cls, APIView):
-            return {m for m in view_cls.http_method_names if hasattr(view_cls, m)}
-
-        if view_cls:
-            return {m for m in ["get", "post", "put", "patch", "delete"] if hasattr(view_cls, m)}
-
-        return {"get"}
 
     def _get_or_create_module(self, code, name):
         return Module.objects.get_or_create(code=code, defaults={"name": name})[0]

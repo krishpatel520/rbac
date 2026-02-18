@@ -60,24 +60,24 @@ def dashboard(request):
         m = tm.module
         sm = tm.submodule
 
-        if m.id not in modules:
-            modules[m.id] = {
-                "code": m.name,
+        if m.pk not in modules:
+            modules[m.pk] = {
+                "code": m.pk,
                 "name": m.name,
                 "permissions": set(),
                 "blocked_apis": [],
                 "sub_modules": []
             }
         if sm:
-            key = (m.id, sm.id)
+            key = (m.pk, sm.pk)
             if key not in submodule_index:
                 sm_dict = {
-                    "code": sm.name,
+                    "code": sm.pk,
                     "name": sm.name,
                     "permissions": set(),
                     "blocked_apis": []
                 }
-                modules[m.id]["sub_modules"].append(sm_dict)
+                modules[m.pk]["sub_modules"].append(sm_dict)
                 submodule_index[key] = sm_dict
 
     for perm in permissions:
@@ -85,10 +85,11 @@ def dashboard(request):
         sm = perm.submodule
         code = perm.code.lower()  # invoice.read, invoice.approve
 
-        modules[m.id]["permissions"].add(code)
+        if m.pk in modules:
+            modules[m.pk]["permissions"].add(code)
 
-        if sm:
-            submodule_index[(m.id, sm.id)]["permissions"].add(code)
+            if sm and (m.pk, sm.pk) in submodule_index:
+                submodule_index[(m.pk, sm.pk)]["permissions"].add(code)
 
     # 5. Attach Blocks
     for block in blocked_apis:
@@ -102,9 +103,12 @@ def dashboard(request):
         }
 
         if ep.submodule:
-            submodule_index[(ep.module.id, ep.submodule.id)]["blocked_apis"].append(data)
+            key = (ep.module.pk, ep.submodule.pk)
+            if key in submodule_index:
+                submodule_index[key]["blocked_apis"].append(data)
         else:
-            modules[ep.module.id]["blocked_apis"].append(data)
+            if ep.module.pk in modules:
+                modules[ep.module.pk]["blocked_apis"].append(data)
 
     for block in tenant_blocks:
         op = block.api_operation
@@ -117,9 +121,12 @@ def dashboard(request):
         }
 
         if ep.submodule:
-            submodule_index[(ep.module.id, ep.submodule.id)]["blocked_apis"].append(data)
+            key = (ep.module.pk, ep.submodule.pk)
+            if key in submodule_index:
+                submodule_index[key]["blocked_apis"].append(data)
         else:
-            modules[ep.module.id]["blocked_apis"].append(data)
+            if ep.module.pk in modules:
+                modules[ep.module.pk]["blocked_apis"].append(data)
 
     for m in modules.values():
         m["permissions"] = perm_flags(m["permissions"])

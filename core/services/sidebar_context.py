@@ -13,7 +13,7 @@ def build_sidebar_context(user):
     # ─────────────────────────────
     # SUPER ADMIN (GLOBAL SIDEBAR)
     # ─────────────────────────────
-    if user.is_super_admin:
+    if user.is_superuser:
         modules = (
             Module.objects.all()
             .prefetch_related("submodules")

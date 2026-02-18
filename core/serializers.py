@@ -8,11 +8,11 @@ def serialize_modules(modules):
             "icon": m.icon,
             "submodules": [
                 {
-                    "code": sm.code,
-                    "name": sm.name,
-                    "icon": sm.icon,
+                    "code": sm.submodule.code,
+                    "name": sm.submodule.name,
+                    "icon": sm.submodule.icon,
                 }
-                for sm in m.submodules.all()
+                for sm in m.submodules.select_related('submodule').all()
             ],
         })
 

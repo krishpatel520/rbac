@@ -6,7 +6,7 @@ from core.models import (
     TenantModule,
     Role,
     Permission,
-    RolePermission, Action, ModuleSubModuleMapping, ApiEndpoint, ApiOperation, TenantApiOverride,
+    RolePermission, ModuleSubModuleMapping, ApiEndpoint, ApiOperation, TenantApiOverride,
 )
 from accounts.models import UserRole
 
@@ -49,8 +49,8 @@ class RoleAdmin(admin.ModelAdmin):
 
 @admin.register(Permission)
 class PermissionAdmin(admin.ModelAdmin):
-    list_display = ("tenant_module","tenant_module", "action")
-    search_fields = ("action",)
+    list_display = ("tenant", "module", "submodule", "code", "is_active")
+    search_fields = ("code", "description")
 
 
 @admin.register(RolePermission)
@@ -77,12 +77,12 @@ class UserRoleAdmin(admin.ModelAdmin):
 
 @admin.register(ModuleSubModuleMapping)
 class ModuleSubModuleMappingAdmin(admin.ModelAdmin):
-    list_display = ("module","module", "submodule","submodule")
+    list_display = ("module", "submodule")
 
 
-@admin.register(Action)
-class ActionModelAdmin(admin.ModelAdmin):
-    list_display = ("id", "code")
+#@admin.register(Action)
+#class ActionModelAdmin(admin.ModelAdmin):
+#    list_display = ("id", "code")
 
 
 @admin.register(ApiEndpoint)
@@ -92,7 +92,7 @@ class ApiEndpointAdmin(admin.ModelAdmin):
 
 @admin.register(ApiOperation)
 class ApiOperationAdmin(admin.ModelAdmin):
-    list_display = ("id", "endpoint","http_method","action","is_enabled")
+    list_display = ("id", "endpoint", "http_method", "permission_code", "is_enabled")
 
 
 @admin.register(TenantApiOverride)

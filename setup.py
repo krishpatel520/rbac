@@ -14,7 +14,7 @@ except FileNotFoundError:
 
 setup(
     name='django-rbac-core',
-    version='0.1.0',
+    version='0.1.1',
     author='Krish Patel',
     author_email='your.email@example.com',  # Update with your email
     description='A comprehensive Role-Based Access Control (RBAC) system for Django applications with multi-tenant support',

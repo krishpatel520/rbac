@@ -76,10 +76,10 @@ def get_user_permissions(tenant, user):
             roles__allowed=True,
             is_active=True,
         )
-        .select_related("tenant_module__module", "tenant_module__submodule")
+        .select_related("module", "submodule")
         .values_list(
-            "tenant_module__module__code",
-            "tenant_module__submodule__code",
+            "module__code",
+            "submodule__code",
             "code",
         )
         .distinct()
@@ -95,8 +95,8 @@ def has_permission(permissions, module, submodule, action):
     Note: Module and SubModule use 'code' as primary key, not 'id'
     """
     key = (
-        module.code,
-        submodule.code if submodule else None,
+        getattr(module, 'code', module),
+        getattr(submodule, 'code', submodule) if submodule else None,
         action,
     )
     return key in permissions
