@@ -53,8 +53,10 @@ class UserManager(BaseUserManager):
 
 class User(AbstractUser):
     """
-    Custom user model.
-    Each user belongs to exactly one tenant.
+    Custom user model for the RBAC system.
+    
+    Each user belongs to exactly one tenant (Organization).
+    This extends the default Django AbstractUser.
     """
     tenant = models.ForeignKey(
         settings.RBAC_TENANT_MODEL,
@@ -72,7 +74,9 @@ class User(AbstractUser):
 
 class UserRole(models.Model):
     """
-    Assigns a role to a user.
+    Represents the assignment of a Role to a User.
+    
+    This is a many-to-many relationship model between User and Role.
     """
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -98,6 +102,12 @@ class UserRole(models.Model):
 
 
 class UserApiBlock(models.Model):
+    """
+    Represents a specific API operation blocked for a specific user within a tenant.
+    
+    This allows for granular restriction of capabilities even if the user's role 
+    nominally permits the action.
+    """
     tenant = models.ForeignKey(
         settings.RBAC_TENANT_MODEL,
         on_delete=models.CASCADE

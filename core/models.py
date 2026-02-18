@@ -75,9 +75,9 @@ class Role(models.Model):
 
 
 class Module(models.Model):
-    """"
+    """
     Represents a CRM module.
-    Examples: CRM , BULk
+    Examples: CRM, BULK
     """
     code = models.CharField(primary_key=True,max_length=50, unique = True)
     name = models.CharField(max_length=100)
@@ -93,7 +93,7 @@ class Module(models.Model):
 
 
 class SubModule(models.Model):
-    """"
+    """
     Represents a CRM sub-module.
     Examples: Enquiry, Quotation, FollowUp, Organization
     """
@@ -116,6 +116,10 @@ class SubModule(models.Model):
 #         db_table = "admin_action"
 
 class Permission(models.Model):
+    """
+    Represents a granular permission (e.g., 'read', 'create', 'approve') 
+    associated with a Tenant, Module, and optionally a SubModule.
+    """
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True)
     module = models.ForeignKey(Module, on_delete=models.CASCADE, null=True)
     submodule = models.ForeignKey(SubModule, null=True, blank=True, on_delete=models.CASCADE)
@@ -130,6 +134,9 @@ class Permission(models.Model):
 
 
 class ModuleSubModuleMapping(models.Model):
+    """
+    Defines the hierarchical relationship between Modules and SubModules.
+    """
     module = models.ForeignKey(Module, on_delete=models.CASCADE, related_name="submodules")
     submodule = models.ForeignKey(SubModule, on_delete=models.CASCADE)
 
@@ -139,6 +146,11 @@ class ModuleSubModuleMapping(models.Model):
 
 
 class TenantModule(models.Model):
+    """
+    Tracks which Modules (and optionally SubModules) are enabled for a specific Tenant.
+    
+    Also handles module expiration.
+    """
     tenant = models.ForeignKey(
         settings.RBAC_TENANT_MODEL,
         on_delete=models.CASCADE,
@@ -172,6 +184,9 @@ class TenantModule(models.Model):
 # Role ↔ Permission (GLOBAL)
 # ----------------------------
 class RolePermission(models.Model):
+    """
+    Maps a Role to a Permission, indicating whether the permission is allowed or denied.
+    """
     role = models.ForeignKey(
         Role,
         on_delete=models.CASCADE,
@@ -197,6 +212,9 @@ class RolePermission(models.Model):
         return f"{self.role} → {self.permission}"
 
 class ApiEndpoint(models.Model):
+    """
+    Represents a backend API endpoint path, linked to a Module and optional SubModule.
+    """
     path = models.CharField(max_length=200)
     module = models.ForeignKey(Module, on_delete=models.CASCADE)
     submodule = models.ForeignKey(
@@ -208,6 +226,11 @@ class ApiEndpoint(models.Model):
 
 
 class ApiOperation(models.Model):
+    """
+    Represents a specific HTTP method (GET, POST, etc.) on an ApiEndpoint.
+    
+    Can be enabled/disabled globally and linked to a specific permission code.
+    """
     endpoint = models.ForeignKey(ApiEndpoint, on_delete=models.CASCADE)
     http_method = models.CharField(max_length=10)
     is_enabled = models.BooleanField(default=True)
@@ -218,6 +241,9 @@ class ApiOperation(models.Model):
         unique_together = ('endpoint', 'http_method')
 
 class TenantApiPermission(models.Model):
+    """
+    Overrides or defines specific API operation permissions for a Tenant.
+    """
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
     api_operation = models.ForeignKey(ApiOperation, on_delete=models.CASCADE)
     permission = models.ForeignKey(Permission, on_delete=models.CASCADE)
@@ -228,6 +254,9 @@ class TenantApiPermission(models.Model):
 
 
 class TenantApiOverride(models.Model):
+    """
+    Allows disabling specific API operations for a specific Tenant.
+    """
     tenant = models.ForeignKey(
         settings.RBAC_TENANT_MODEL,
         on_delete=models.CASCADE

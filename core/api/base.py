@@ -3,7 +3,8 @@ from rest_framework.permissions import IsAuthenticated
 from core.services.permission_api_resolver import check_user_permission, DENY
 
 
-class RBACViewSet(viewsets.ViewSet):
+
+class RBACViewSet(viewsets.ModelViewSet):
     """
     Framework-level API base class.
 

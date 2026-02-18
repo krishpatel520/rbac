@@ -148,6 +148,16 @@ def dashboard(request):
 
 
 def perm_flags(perms):
+    """
+    Converts a list of permission strings into a dictionary of boolean flags.
+    
+    Args:
+        perms: List of permission strings (e.g., ['invoice.read', 'invoice.create'])
+        
+    Returns:
+        dict: Dictionary with keys 'read', 'create', 'update', 'delete', 'approve'
+              and boolean values.
+    """
     return {
         "read": any(".read" in p for p in perms),
         "create": any(".create" in p for p in perms),
@@ -158,6 +168,9 @@ def perm_flags(perms):
 
 
 def sidebar_context(request):
+    """
+    Context processor to inject sidebar modules into templates.
+    """
     if not request.user.is_authenticated:
         return {}
 

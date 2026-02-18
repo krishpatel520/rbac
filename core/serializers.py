@@ -1,4 +1,9 @@
 def serialize_modules(modules):
+    """
+    Serializes a list of Module objects into a dictionary format suitable for API responses.
+    
+    Includes nested submodules.
+    """
     data = []
 
     for m in modules:
@@ -20,6 +25,17 @@ def serialize_modules(modules):
 
 
 def serialize_tenant_modules(tenant_modules, permissions):
+    """
+    Serializes modules enabled for a specific tenant, annotated with user permissions.
+    
+    Args:
+        tenant_modules: QuerySet of TenantModule objects.
+        permissions: QuerySet of Permission objects available to the user.
+        
+    Returns:
+        list: List of module dictionaries with 'permissions' (e.g., 'module_access') 
+              and nested submodules.
+    """
     modules = {}
     sub_index = {}
 
