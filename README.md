@@ -1,4 +1,4 @@
-# Django RBAC Project
+# Role Based Access Control (RBAC)
 
 A robust, multi-tenant Role-Based Access Control (RBAC) system for Django applications.
 
