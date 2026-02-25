@@ -55,11 +55,11 @@ services:
     container_name: rbac_service
     restart: unless-stopped
     env_file:
-      - ../.env
+      - .env
     environment:
       DB_HOST: db
     ports:
-      - "${RBAC_PORT:-8002}:8002"
+      - "${RBAC_PORT:-8004}:8004"
     depends_on:
       db:
         condition: service_healthy
