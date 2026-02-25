@@ -275,3 +275,4 @@ django_rbac_project/
 ## License
 
 [MIT License](LICENSE)
+
