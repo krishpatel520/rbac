@@ -1,0 +1,24 @@
+# =============================================================================
+# docker-compose.org.yml — Organisation deployment override (WSL + private registry)
+#
+# Extends the base docker-compose.yml for organisation deployment.
+# Pulls the pre-built image from the private registry.
+# The image must already have been built and pushed via scripts/build-org.sh.
+#
+# Pre-requisite:
+#   ./scripts/build-org.sh [TAG]    # build & push from WSL
+#
+# Usage (inside WSL):
+#   docker compose -f docker/docker-compose.yml \
+#                  -f docker/docker-compose.org.yml up -d
+#
+# Or via Makefile:
+#   make org-up
+#   make org-pull
+# =============================================================================
+
+services:
+  rbac-service:
+    # Pull from private registry — no local build needed
+    image: ${ORG_REGISTRY:-192.168.71.244:30444}/rbac-admin:${RBAC_IMAGE_TAG:-latest}
+    container_name: rbac_service_org

@@ -1,25 +1,26 @@
 # =============================================================================
-# docker-compose.yml — RBAC Admin Service  (WSL / private-registry mode)
+# docker-compose.yml — RBAC Admin Service  (BASE)
 #
-# This compose file is used for RUNNING the service using the image that
-# was already built and pushed to the private registry by build_push.sh.
-# It is NOT used to build the image.
+# This is the shared base compose file.  It is NOT used directly.
+# Use one of the environment overrides:
 #
-# Pre-requisite:
-#   The image must already exist in the registry:
-#   192.168.71.244:30444/rbac-admin:<tag>
+#   Personal / local Docker:
+#     docker compose -f docker/docker-compose.yml \
+#                    -f docker/docker-compose.local.yml up -d
 #
-# Usage (inside WSL):
-#   docker-compose up -d          # start
-#   docker-compose down           # stop (keeps DB volume)
-#   docker-compose down -v        # stop + wipe DB volume
-#   docker-compose pull           # pull latest image from registry
+#   Organisation (private registry + WSL):
+#     docker compose -f docker/docker-compose.yml \
+#                    -f docker/docker-compose.org.yml up -d
+#
+# Or use the Makefile shortcuts:
+#   make local-up
+#   make org-up
 # =============================================================================
 
 services:
 
   # ──────────────────────────────────────────────────────────────────────────
-  # PostgreSQL Database
+  # PostgreSQL Database (shared across all environments)
   # ──────────────────────────────────────────────────────────────────────────
   db:
     image: postgres:15-alpine
@@ -48,16 +49,15 @@ services:
       - rbac_net
 
   # ──────────────────────────────────────────────────────────────────────────
-  # RBAC Admin Service  (pulls from private registry)
+  # RBAC Admin Service  (image source defined per-environment override)
   # ──────────────────────────────────────────────────────────────────────────
   rbac-service:
-    image: 192.168.71.244:30444/rbac-admin:${RBAC_IMAGE_TAG:-latest}
     container_name: rbac_service
     restart: unless-stopped
     env_file:
-      - .env
+      - ../.env
     environment:
-      DB_HOST: db # always the compose service name
+      DB_HOST: db
     ports:
       - "${RBAC_PORT:-8002}:8002"
     depends_on:

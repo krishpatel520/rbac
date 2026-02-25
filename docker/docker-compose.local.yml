@@ -1,0 +1,23 @@
+# =============================================================================
+# docker-compose.local.yml — Personal / Local Docker override
+#
+# Extends the base docker-compose.yml for independent personal deployment.
+# Builds the image locally from source.  No private registry required.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.yml \
+#                  -f docker/docker-compose.local.yml up -d --build
+#
+# Or via Makefile:
+#   make local-up
+#   make local-build
+# =============================================================================
+
+services:
+  rbac-service:
+    # Build locally — no registry dependency
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: rbac-admin:local
+    container_name: rbac_service_local

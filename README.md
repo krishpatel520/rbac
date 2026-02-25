@@ -164,124 +164,62 @@ Use `TenantBlockedOperation` to block API paths for an entire tenant, or `UserBl
 
 ---
 
-## Docker Setup (WSL + Private Registry)
+## Docker Setup
 
-The RBAC Admin image is built **inside WSL** and pushed to the organisation's private registry at `192.168.71.244:30444`.
+This project supports two independent deployment modes from the same codebase:
 
-> **Do not build from `/mnt/c`.** Always copy the project into the WSL filesystem first.
+```
+Same application
+├── Personal deployment   → local Docker build (no registry needed)
+└── Org deployment        → private registry (192.168.71.244:30444) + WSL
+```
 
-### 1. One-time WSL Daemon Configuration
+> See [`docs/deployment.md`](docs/deployment.md) for the full guide.
 
-The private registry runs over plain HTTP (not HTTPS). Tell Docker to trust it:
+### Personal / Local (independent Docker)
 
 ```bash
-# Create or edit the daemon config
-sudo mkdir -p /etc/docker
+cp .env.example .env   # fill in credentials
+make local-up          # build from source + start
+make local-logs        # follow logs
+make local-down        # stop
+```
+
+### Organisation (WSL + private registry)
+
+**One-time WSL daemon config** — allow the insecure private registry:
+
+```bash
 sudo nano /etc/docker/daemon.json
-```
-
-Paste the following and save:
-
-```json
-{
-  "insecure-registries": ["192.168.71.244:30444"]
-}
-```
-
-Restart the Docker daemon:
-
-```bash
-sudo dockerd &
-# or, if using a service:
+# Add: { "insecure-registries": ["192.168.71.244:30444"] }
 sudo service docker restart
 ```
 
----
-
-### 2. Copy Project into WSL Filesystem
+**Copy project into WSL filesystem:**
 
 ```bash
-# Inside WSL — run once (or after major changes)
 cp -r /mnt/c/Users/krish.patel/Desktop/django_rbac_project ~/rbac-admin
 cd ~/rbac-admin
 ```
 
----
-
-### 3. Build & Push (via script)
+**Build & push, then deploy:**
 
 ```bash
-# Make the script executable (first time only)
-chmod +x build_push.sh
-
-# Build and push with 'latest' tag
-./build_push.sh
-
-# Build and push with a specific tag
-./build_push.sh v1.0.0
+bash scripts/build-org.sh v1.0.0   # build + push
+# Set RBAC_IMAGE_TAG=v1.0.0 in .env
+make org-up                        # pull + start
 ```
 
-The script will:
-1. Log in to `192.168.71.244:30444` as user `Hiren`
-2. Build the image tagged `192.168.71.244:30444/rbac-admin:<tag>`
-3. Print the local image list
-4. Push to the private registry
+### Makefile Quick Reference
 
----
-
-### 4. Manual Commands (step by step)
-
-```bash
-# Login
-docker login -u Hiren http://192.168.71.244:30444/
-# Enter password: Admin@1234
-
-# Build
-docker build -t 192.168.71.244:30444/rbac-admin:latest .
-
-# Verify local image
-docker images
-
-# Push
-docker push 192.168.71.244:30444/rbac-admin:latest
 ```
-
----
-
-### 5. Run the Stack (WSL)
-
-The `docker-compose.yml` **pulls** the image from the registry (no local build).
-
-```bash
-# Set the tag in .env (edit DB_PASSWORD, SECRET_KEY etc. first)
-nano .env
-# Set: RBAC_IMAGE_TAG=latest (or the tag you pushed)
-
-# Pull latest image from registry + start all containers
-docker-compose pull rbac-service
-docker-compose up -d
-
-# Check logs
-docker-compose logs -f
-docker logs rbac_service
-docker logs rbac_db
-
-# Stop (keeps DB volume)
-docker-compose down
-
-# Stop + wipe DB data
-docker-compose down -v
+make help           List all targets
+make local-up       Build from source + start (personal)
+make org-up         Pull from registry + start (org)
+make shell          Django shell in running container
+make migrate        Run DB migrations
+make clean          Remove stopped containers & dangling images
 ```
-
----
-
-### 6. If Docker Stops Working
-
-```bash
-sudo dockerd &
-```
-
----
 
 ### Environment Variables (.env)
 
@@ -303,26 +241,33 @@ sudo dockerd &
 
 ```
 django_rbac_project/
-├── accounts/               # Custom User model & authentication
-├── core/
-│   ├── exceptions.py       # RBACPermissionDenied (typed violation codes)
-│   ├── models.py           # Tenant, Role, Permission, UserRole, RolePermission, etc.
-│   ├── middleware.py        # CurrentTenantMiddleware
-│   ├── exception_middleware.py   # JSON exception catcher
-│   ├── drf_exception_handler.py  # DRF JSON error handler
-│   ├── services/
-│   │   └── RBACMiddleware.py     # RBAC enforcement middleware
-│   ├── api/                # DRF views & serializers
-│   └── management/         # Custom management commands
-├── rbac_project/           # Django project settings & WSGI
-├── Dockerfile              # Image definition
-├── docker-compose.yml      # Multi-container stack (pulls from private registry)
-├── entrypoint.sh           # Container startup: wait-for-db → migrate → collectstatic → start
-├── build_push.sh           # WSL script: login → build → push to private registry
-├── gunicorn.conf.py        # Gunicorn worker/timeout/logging config
-├── .env                    # Runtime secrets (never commit)
-├── requirements.txt        # Python dependencies
-└── setup.py                # Package distribution config
+│
+├── app/                         # application source
+│   ├── accounts/                # Custom User model & authentication
+│   ├── core/                    # RBAC models, middleware, services, APIs
+│   └── rbac_project/            # Django project settings & WSGI
+│
+├── docker/
+│   ├── Dockerfile               # Image definition
+│   ├── docker-compose.yml       # Base — shared DB + service skeleton
+│   ├── docker-compose.local.yml # Personal — builds image from source
+│   └── docker-compose.org.yml   # Org — pulls from private registry
+│
+├── scripts/
+│   ├── build-local.sh           # Build image locally (no registry)
+│   ├── build-org.sh             # Build + push to private registry (WSL)
+│   └── run-dev.sh               # Start / stop local dev stack
+│
+├── docs/
+│   └── deployment.md            # Full deployment guide
+│
+├── entrypoint.sh                # wait-for-db → migrate → collectstatic → gunicorn
+├── gunicorn.conf.py             # Gunicorn worker / timeout / logging config
+├── Makefile                     # Dual-env shortcuts (local-* / org-*)
+├── .env.example                 # Safe-to-commit env template
+├── .env                         # Runtime secrets (never commit)
+├── requirements.txt             # Python dependencies
+└── setup.py                     # Package distribution config
 ```
 
 ---

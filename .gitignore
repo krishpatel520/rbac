@@ -29,6 +29,10 @@ staticfiles/
 # Environment variables
 .env
 .env.local
+.env.org
+
+# Docker
+docker/volumes/
 
 # OS
 .DS_Store
