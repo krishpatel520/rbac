@@ -1,6 +1,21 @@
+"""
+RBAC Enforcement Middleware.
+
+Priority Order (Deny Wins):
+ 1. Infrastructure bypass  (admin, static, docs)
+ 2. Anonymous users pass through  (auth handled elsewhere)
+ 3. API must be registered in ApiOperation table
+ 4. Platform-level API disable
+ 5. Tenant subscription module check
+ 6. Tenant-level API override block
+ 7. User-level explicit API block  (highest-priority deny)
+ 8. Role → Permission check  (module-level, then submodule-level)
+ 9. Default deny
+"""
 from datetime import date
 
 from core.models import TenantModule
+from core.exceptions import RBACPermissionDenied
 from core.rbac.constants import HTTP_METHOD_ACTION_MAP
 from core.services.permission_api_resolver import (
     has_permission,
@@ -15,19 +30,13 @@ class RBACMiddleware:
     """
     Enforces RBAC + Tenant Subscription + API Overrides.
 
-    Priority Order (Deny Wins):
-    1. Infrastructure bypass
-    2. Authentication handled elsewhere
-    3. API must be registered
-    4. Platform-level disable
-    5. Tenant subscription module check
-    6. Tenant API override block
-    7. User API block (highest priority)
-    8. Role → Permission check
-    9. Default deny
+    All denials raise ``RBACPermissionDenied`` which carries both a
+    machine-readable ``violation_type`` and a human-readable ``detail``
+    message.  The ``JSONExceptionMiddleware`` converts these into
+    structured 403 JSON responses.
     """
 
-    # Paths that should NEVER be RBAC protected
+    # Paths that should NEVER be RBAC-protected
     BYPASS_PATH_PREFIXES = (
         "/admin/",
         "/accounts/",
@@ -45,47 +54,51 @@ class RBACMiddleware:
     def __call__(self, request):
         path = request.path
 
-        # ─────────────────────────────
-        # 1️⃣ Infrastructure bypass
-        # ─────────────────────────────
-        # Django admin, static files, docs etc. should never be blocked by RBAC
+        # ─────────────────────────────────────────────────────
+        # 1. Infrastructure bypass
+        # ─────────────────────────────────────────────────────
         for prefix in self.BYPASS_PATH_PREFIXES:
             if path.startswith(prefix):
                 return self.get_response(request)
 
-        # Get authenticated user
         user = request.user
 
-        # ─────────────────────────────
-        # 2️⃣ Anonymous users bypass
-        # ─────────────────────────────
-        # Authentication is handled separately (JWT / Session Middleware)
+        # ─────────────────────────────────────────────────────
+        # 2. Anonymous users bypass  (auth handled separately)
+        # ─────────────────────────────────────────────────────
         if not user or not user.is_authenticated:
             return self.get_response(request)
 
-        # Tenant attached to user (multi-tenant SaaS)
         tenant = getattr(user, "tenant", None)
 
-        # ─────────────────────────────
-        # 3️⃣ Resolve API operation
-        # ─────────────────────────────
-        # Find ApiOperation based on request path + method
+        # ─────────────────────────────────────────────────────
+        # 3. API must be registered
+        # ─────────────────────────────────────────────────────
         operation = resolve_api_operation(request)
         if not operation:
-            # Security: deny unknown APIs
-            raise PermissionError("API not registered")
+            raise RBACPermissionDenied(
+                violation_type=RBACPermissionDenied.API_NOT_REGISTERED,
+                detail=(
+                    f"The API endpoint '{request.method} {path}' is not registered "
+                    "in the system. Access is denied."
+                ),
+            )
 
-        # ─────────────────────────────
-        # 4️⃣ Platform-level API disable
-        # ─────────────────────────────
-        # Super admin can globally disable API for maintenance/security
+        # ─────────────────────────────────────────────────────
+        # 4. Platform-level API disable
+        # ─────────────────────────────────────────────────────
         if not operation.is_enabled:
-            raise PermissionError("API disabled globally")
+            raise RBACPermissionDenied(
+                violation_type=RBACPermissionDenied.API_DISABLED_GLOBALLY,
+                detail=(
+                    f"The API endpoint '{request.method} {path}' has been disabled "
+                    "globally by the platform administrator."
+                ),
+            )
 
-        # ─────────────────────────────
-        # 5️⃣ Tenant module subscription check
-        # ─────────────────────────────
-        # Tenant must have purchased/enabled this module/submodule
+        # ─────────────────────────────────────────────────────
+        # 5. Tenant module subscription check
+        # ─────────────────────────────────────────────────────
         if tenant:
             tm = TenantModule.objects.filter(
                 tenant=tenant,
@@ -93,64 +106,80 @@ class RBACMiddleware:
                 submodule=operation.endpoint.submodule,
             ).first()
 
-            # Tenant never subscribed to module
             if not tm:
-                raise PermissionError("Tenant not subscribed to module")
+                raise RBACPermissionDenied(
+                    violation_type=RBACPermissionDenied.TENANT_NOT_SUBSCRIBED,
+                    detail=(
+                        f"Tenant '{tenant}' does not have an active subscription "
+                        f"to the module '{operation.endpoint.module}'. Access is denied."
+                    ),
+                )
 
-            # Module disabled manually for tenant
             if not tm.is_enabled:
-                raise PermissionError("Module disabled for tenant")
+                raise RBACPermissionDenied(
+                    violation_type=RBACPermissionDenied.MODULE_DISABLED,
+                    detail=(
+                        f"Module '{operation.endpoint.module}' has been disabled "
+                        f"for tenant '{tenant}' by the tenant administrator."
+                    ),
+                )
 
-            # Subscription expired
             if tm.expiration_date and tm.expiration_date < date.today():
-                raise PermissionError("Tenant subscription expired")
+                raise RBACPermissionDenied(
+                    violation_type=RBACPermissionDenied.SUBSCRIPTION_EXPIRED,
+                    detail=(
+                        f"Tenant '{tenant}' subscription for module "
+                        f"'{operation.endpoint.module}' expired on {tm.expiration_date}."
+                    ),
+                )
 
-        # ─────────────────────────────
-        # 6️⃣ Tenant-level API override
-        # ─────────────────────────────
-        # Tenant admin can disable specific API even if module is enabled
+        # ─────────────────────────────────────────────────────
+        # 6. Tenant-level API override
+        # ─────────────────────────────────────────────────────
         if tenant_api_disabled(tenant, operation):
-            raise PermissionError("API disabled for tenant")
+            raise RBACPermissionDenied(
+                violation_type=RBACPermissionDenied.API_DISABLED_FOR_TENANT,
+                detail=(
+                    f"The API endpoint '{request.method} {path}' has been "
+                    f"disabled by the administrator for tenant '{tenant}'."
+                ),
+            )
 
-        # ─────────────────────────────
-        # 7️⃣ User-level explicit API block
-        # ─────────────────────────────
-        # Highest priority deny (even if role allows)
+        # ─────────────────────────────────────────────────────
+        # 7. User-level explicit API block  (highest-priority deny)
+        # ─────────────────────────────────────────────────────
         if user_api_blocked(tenant, user, operation):
-            raise PermissionError("API blocked for user")
+            raise RBACPermissionDenied(
+                violation_type=RBACPermissionDenied.API_BLOCKED_FOR_USER,
+                detail=(
+                    f"User '{user}' has been explicitly blocked from accessing "
+                    f"'{request.method} {path}'."
+                ),
+            )
 
-        # ─────────────────────────────
-        # 8️⃣ Resolve permission action code
-        # ─────────────────────────────
-        # If ApiOperation has custom permission_code use it,
-        # otherwise derive from HTTP method (GET → view, POST → create, etc.)
+        # ─────────────────────────────────────────────────────
+        # 8. Resolve permission action code
+        # ─────────────────────────────────────────────────────
         action_code = (
             operation.permission_code
             or HTTP_METHOD_ACTION_MAP.get(request.method.upper())
         )
 
         if not action_code:
-            raise PermissionError("Unknown action mapping")
+            raise RBACPermissionDenied(
+                violation_type=RBACPermissionDenied.UNKNOWN_ACTION,
+                detail=(
+                    f"Cannot map HTTP method '{request.method}' to a permission "
+                    "action code. The endpoint may be misconfigured."
+                ),
+            )
 
-        # ─────────────────────────────
-        # 9️⃣ Fetch user permissions
-        # ─────────────────────────────
-        # This returns set of tuples:
-        # (module_code, submodule_code | None, permission_code)
+        # ─────────────────────────────────────────────────────
+        # 9. Fetch user permissions and check module / submodule
+        # ─────────────────────────────────────────────────────
         permissions = get_user_permissions(tenant, user)
 
-        # Debug logs (remove in production)
-        print("DEBUG permissions:", permissions)
-        print(
-            f"DEBUG checking → module={operation.endpoint.module.code}, "
-            f"submodule={operation.endpoint.submodule.code if operation.endpoint.submodule else None}, "
-            f"action={action_code}"
-        )
-
-        # ─────────────────────────────
-        # 🔟 Module-level permission check
-        # ─────────────────────────────
-        # If tenant granted permission at module level → allow all submodules
+        # Module-level: permission at module level covers all submodules
         if has_permission(
             permissions,
             module=operation.endpoint.module,
@@ -159,10 +188,7 @@ class RBACMiddleware:
         ):
             return self.get_response(request)
 
-        # ─────────────────────────────
-        # 1️⃣1️⃣ Submodule-level permission fallback
-        # ─────────────────────────────
-        # If module-level not granted, check submodule-specific permission
+        # Submodule-level fallback
         if operation.endpoint.submodule and has_permission(
             permissions,
             module=operation.endpoint.module,
@@ -171,7 +197,19 @@ class RBACMiddleware:
         ):
             return self.get_response(request)
 
-        # ─────────────────────────────
-        # 1️⃣2️⃣ Final deny (default deny policy)
-        # ─────────────────────────────
-        raise PermissionError("Permission denied")
+        # ─────────────────────────────────────────────────────
+        # 10. Final deny  (default-deny policy)
+        # ─────────────────────────────────────────────────────
+        raise RBACPermissionDenied(
+            violation_type=RBACPermissionDenied.PERMISSION_DENIED,
+            detail=(
+                f"User '{user}' does not have '{action_code}' permission on "
+                f"module '{operation.endpoint.module}'"
+                + (
+                    f" / submodule '{operation.endpoint.submodule}'"
+                    if operation.endpoint.submodule
+                    else ""
+                )
+                + f" required to access '{request.method} {path}'."
+            ),
+        )

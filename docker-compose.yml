@@ -1,0 +1,86 @@
+# =============================================================================
+# docker-compose.yml — RBAC Admin Service  (WSL / private-registry mode)
+#
+# This compose file is used for RUNNING the service using the image that
+# was already built and pushed to the private registry by build_push.sh.
+# It is NOT used to build the image.
+#
+# Pre-requisite:
+#   The image must already exist in the registry:
+#   192.168.71.244:30444/rbac-admin:<tag>
+#
+# Usage (inside WSL):
+#   docker-compose up -d          # start
+#   docker-compose down           # stop (keeps DB volume)
+#   docker-compose down -v        # stop + wipe DB volume
+#   docker-compose pull           # pull latest image from registry
+# =============================================================================
+
+services:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # PostgreSQL Database
+  # ──────────────────────────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: rbac_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${DB_EXPOSED_PORT:-5433}:5432"
+    volumes:
+      - rbac_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - rbac_net
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # RBAC Admin Service  (pulls from private registry)
+  # ──────────────────────────────────────────────────────────────────────────
+  rbac-service:
+    image: 192.168.71.244:30444/rbac-admin:${RBAC_IMAGE_TAG:-latest}
+    container_name: rbac_service
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DB_HOST: db # always the compose service name
+    ports:
+      - "${RBAC_PORT:-8002}:8002"
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - rbac_net
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  rbac_postgres_data:
+    driver: local
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  rbac_net:
+    driver: bridge
