@@ -107,7 +107,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
-
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # For production static files
     # 🔐 Tenant context (CRITICAL)
     'core.middleware.CurrentTenantMiddleware',
 
