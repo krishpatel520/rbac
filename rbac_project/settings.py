@@ -45,8 +45,8 @@ INSTALLED_APPS = [
     'drf_spectacular',
 
     # Project apps
-    'accounts',
-    'core',
+    'msbc_rbac.accounts',
+    'msbc_rbac.core',
 
     # Domain modules (ERP) - Commented out as they don't exist yet
     # 'organization',
@@ -93,8 +93,6 @@ SPECTACULAR_SETTINGS = {
     },
 }
 
-# Custom user model
-AUTH_USER_MODEL = 'accounts.User'
 
 
 # ------------------------------------------------------------------------------
@@ -109,14 +107,14 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',  # For production static files
     # 🔐 Tenant context (CRITICAL)
-    'core.middleware.CurrentTenantMiddleware',
+    'msbc_rbac.core.middleware.CurrentTenantMiddleware',
 
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'core.services.RBACMiddleware.RBACMiddleware',
+    'msbc_rbac.core.services.RBACMiddleware.RBACMiddleware',
     
     # 🔧 JSON Exception Handler (MUST be last to catch all exceptions)
-    'core.exception_middleware.JSONExceptionMiddleware',
+    'msbc_rbac.core.exception_middleware.JSONExceptionMiddleware',
 ]
 
 
@@ -162,9 +160,9 @@ TEMPLATES = [
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME':     os.environ.get('DB_NAME', 'rbac_project'),
+        'NAME':     os.environ.get('DB_NAME', 'msbc_rbac'),
         'USER':     os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', 'msbc%123'),
+        'PASSWORD': os.environ.get('DB_PASSWORD', '1234'),
         'HOST':     os.environ.get('DB_HOST', 'localhost'),
         'PORT':     os.environ.get('DB_PORT', '5432'),
     }
@@ -223,3 +221,5 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 # ------------------------------------------------------------------------------
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+AUTH_USER_MODEL = 'accounts.User'
+# TENANT_MODEL = 'core.Tenant'

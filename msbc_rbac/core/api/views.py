@@ -2,9 +2,9 @@ from rest_framework import serializers
 from rest_framework.routers import DefaultRouter
 from rest_framework.response import Response
 
-from core.api.base import RBACViewSet
-from core.models import Role, Tenant, Module
-from accounts.models import User
+from msbc_rbac.core.api.base import RBACViewSet
+from msbc_rbac.core.models import Role, Tenant, Module
+from msbc_rbac.accounts.models import User
 
 # 1. Serializers
 class TenantSerializer(serializers.ModelSerializer):

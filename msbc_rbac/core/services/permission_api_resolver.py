@@ -1,8 +1,8 @@
-from accounts.models import UserApiBlock
-from core.models import ApiEndpoint, ApiOperation, TenantApiOverride, Permission
+from msbc_rbac.accounts.models import UserApiBlock
+from msbc_rbac.core.models import ApiEndpoint, ApiOperation, TenantApiOverride, Permission
 import re
 
-from core.rbac.constants import HTTP_METHOD_ACTION_MAP
+from msbc_rbac.core.rbac.constants import HTTP_METHOD_ACTION_MAP
 
 DENY = False
 ALLOW = True

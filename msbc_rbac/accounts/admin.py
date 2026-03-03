@@ -1,7 +1,11 @@
 from django.contrib import admin
+from django.apps import apps
 from django.contrib.auth.admin import UserAdmin
-from .models import User, UserApiBlock
+from django.conf import settings
 
+from .models import  UserApiBlock
+
+User = apps.get_model(settings.AUTH_USER_MODEL)
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):

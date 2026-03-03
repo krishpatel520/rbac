@@ -1,10 +1,10 @@
-from core.models import (
+from msbc_rbac.core.models import (
     Module,
     SubModule,
     TenantModule,
     Permission,
 )
-from core.serializers import serialize_tenant_modules, serialize_modules
+from msbc_rbac.core.serializers import serialize_tenant_modules, serialize_modules
 
 
 def build_sidebar_context(user):

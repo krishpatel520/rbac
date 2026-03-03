@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "msbc-rbac"
-version = "0.0.4"
+version = "0.0.8"
 description = "A comprehensive Role-Based Access Control (RBAC) system for Django applications with multi-tenant support"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
-    {name = "Krish Patel", email = "your.email@example.com"}
+    {name = "MSBC", email = "your.email@example.com"}
 ]
 keywords = ["django", "rbac", "role-based-access-control", "permissions", "multi-tenant", "authorization"]
 classifiers = [
@@ -44,10 +44,18 @@ Documentation = "https://github.com/yourusername/django-rbac-core#readme"
 Repository = "https://github.com/yourusername/django-rbac-core"
 "Bug Tracker" = "https://github.com/yourusername/django-rbac-core/issues"
 
-[tool.setuptools]
-packages = ["core", "accounts"]
-include-package-data = true
 
-[tool.setuptools.package-data]
-core = ["migrations/*.py", "templates/**/*", "static/**/*"]
-accounts = ["migrations/*.py", "templates/**/*", "static/**/*"]
+
+[tool.setuptools.packages.find]
+include = ["msbc_rbac*"]
+
+exclude = [
+    "**/tests*",
+    "**/fixtures*",
+    "**/*.tests",
+    "**/*.tests.*",
+    "**/tests.*",
+]
+
+#core = ["migrations/*.py", "templates/**/*", "static/**/*"]
+#accounts = ["migrations/*.py", "templates/**/*", "static/**/*"]

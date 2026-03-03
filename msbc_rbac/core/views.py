@@ -1,10 +1,10 @@
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
 
-from core.models import TenantModule, Permission, TenantApiOverride, Role
-from accounts.models import UserApiBlock
-from core.serializers import serialize_tenant_modules
-from core.services.sidebar_context import build_sidebar_context
+from msbc_rbac.core.models import TenantModule, Permission, TenantApiOverride, Role
+from msbc_rbac.accounts.models import UserApiBlock
+from msbc_rbac.core.serializers import serialize_tenant_modules
+from msbc_rbac.core.services.sidebar_context import build_sidebar_context
 
 
 # from core.utils import get_user_allowed_actions, get_user_access, build_access_tree # Deleted

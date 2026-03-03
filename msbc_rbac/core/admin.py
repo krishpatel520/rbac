@@ -1,19 +1,27 @@
 from django.contrib import admin
+from django.apps import apps
+from django.conf import settings
 
-from core.models import (
-    Tenant,
+
+from msbc_rbac.core.models import (
     Module,
     TenantModule,
     Role,
     Permission,
     RolePermission, ModuleSubModuleMapping, ApiEndpoint, ApiOperation, TenantApiOverride,
 )
-from accounts.models import UserRole
+from msbc_rbac.accounts.models import UserRole
 
+Tenant = apps.get_model(settings.TENANT_MODEL)
 
 @admin.register(Tenant)
 class TenantAdmin(admin.ModelAdmin):
-    list_display = ("id", "name", "is_active")
+    def get_list_display(self, request):
+        return (
+            self.model._meta.pk.name,  # dynamic primary key
+            "name",
+            "is_active",
+        )
     list_filter = ("is_active",)
     search_fields = ("name",)
 
@@ -29,7 +37,6 @@ class TenantModuleAdmin(admin.ModelAdmin):
     list_display = ("id", "tenant", "module", "is_enabled")
     list_filter = ("tenant", "module", "is_enabled")
     search_fields = ("tenant__name", "module__code")
-    autocomplete_fields = ("tenant", "module")
 
 
 @admin.register(Role)
