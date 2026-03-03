@@ -2,11 +2,12 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.conf import settings
 
-from core.models import Role, ApiOperation
+from msbc_rbac.core.models import Role, ApiOperation
+from decouple import config
 
 # Configure RBAC_TENANT_MODEL - defaults to 'core.Tenant' if not set
-if not hasattr(settings, 'RBAC_TENANT_MODEL'):
-    settings.RBAC_TENANT_MODEL = 'core.Tenant'
+if not hasattr(settings, 'TENANT_MODEL'):
+    settings.TENANT_MODEL = 'core.Tenant'
 
 
 class UserManager(BaseUserManager):
@@ -59,11 +60,23 @@ class User(AbstractUser):
     This extends the default Django AbstractUser.
     """
     tenant = models.ForeignKey(
-        settings.RBAC_TENANT_MODEL,
+        settings.TENANT_MODEL,
         blank=False,
         null=True,
         on_delete=models.PROTECT,
         related_name="users",
+    )
+
+    groups = models.ManyToManyField(
+        'auth.Group',
+        related_name='rbac_users',
+        blank=True
+    )
+
+    user_permissions = models.ManyToManyField(
+        'auth.Permission',
+        related_name='rbac_users',
+        blank=True
     )
 
     objects = UserManager()
@@ -89,6 +102,14 @@ class UserRole(models.Model):
         related_name="role_users",
     )
 
+    tenant = models.ForeignKey(
+        settings.TENANT_MODEL,
+        blank=False,
+        null=True,
+        on_delete=models.PROTECT,
+        related_name="users",
+    )
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
@@ -109,7 +130,7 @@ class UserApiBlock(models.Model):
     nominally permits the action.
     """
     tenant = models.ForeignKey(
-        settings.RBAC_TENANT_MODEL,
+        settings.TENANT_MODEL,
         on_delete=models.CASCADE
     )
     user = models.ForeignKey(

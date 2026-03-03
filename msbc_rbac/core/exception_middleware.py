@@ -12,7 +12,7 @@ from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import Http404, JsonResponse
 
-from core.exceptions import RBACPermissionDenied
+from msbc_rbac.core.exceptions import RBACPermissionDenied
 
 logger = logging.getLogger(__name__)
 

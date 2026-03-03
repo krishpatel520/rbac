@@ -20,16 +20,16 @@ from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularSwaggerView,
 )
-from accounts.api.views import obtain_auth_token
+from msbc_rbac.accounts.api.views import obtain_auth_token
 
 urlpatterns = [
     path('admin/', admin.site.urls),
 
     # Core(dashboard + RBAC protected views)
-    path('', include('core.urls')),
+    path('', include('msbc_rbac.core.urls')),
 
     # Authentication
-    path('accounts/', include('accounts.urls')),
+    path('accounts/', include('msbc_rbac.accounts.urls')),
     path('api/auth/token/', obtain_auth_token, name='api_token_auth'),  # Token authentication
 
     # OpenAPI schema
@@ -39,7 +39,7 @@ urlpatterns = [
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema')),
 
     # Core / Demo API
-    path('api/core/', include('core.api.urls')),
+    path('api/core/', include('msbc_rbac.core.api.urls')),
 
     # Enquiry API - Commented out as they don't exist yet
     # path('api/', include('enquiry.api.urls')),
@@ -57,7 +57,7 @@ urlpatterns = [
 # ------------------------------------------------------------------------------
 # Custom Error Handlers (JSON responses)
 # ------------------------------------------------------------------------------
-from core.error_handlers import (
+from msbc_rbac.core.error_handlers import (
     json_404_handler,
     json_500_handler,
     json_400_handler,

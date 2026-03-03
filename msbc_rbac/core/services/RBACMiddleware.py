@@ -13,17 +13,20 @@ Priority Order (Deny Wins):
  9. Default deny
 """
 from datetime import date
+from django.conf import settings
 
-from core.models import TenantModule
-from core.exceptions import RBACPermissionDenied
-from core.rbac.constants import HTTP_METHOD_ACTION_MAP
-from core.services.permission_api_resolver import (
+from msbc_rbac.core.models import TenantModule
+from django.http import JsonResponse
+from msbc_rbac.core.rbac.constants import HTTP_METHOD_ACTION_MAP
+from msbc_rbac.core.services.permission_api_resolver import (
     has_permission,
     get_user_permissions,
     user_api_blocked,
     tenant_api_disabled,
     resolve_api_operation,
 )
+
+
 
 
 class RBACMiddleware:
@@ -37,16 +40,9 @@ class RBACMiddleware:
     """
 
     # Paths that should NEVER be RBAC-protected
-    BYPASS_PATH_PREFIXES = (
-        "/admin/",
-        "/accounts/",
-        "/dashboard/",
-        "/static/",
-        "/media/",
-        "/favicon.ico",
-        "/api/schema/",
-        "/api/docs/",
-    )
+    BYPASS_PATH_PREFIXES = settings.BYPASS_PATH_PREFIXES
+
+    print("BYPASS_PATH_PREFIXES >>>>> ",BYPASS_PATH_PREFIXES)
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -58,7 +54,10 @@ class RBACMiddleware:
         # 1. Infrastructure bypass
         # ─────────────────────────────────────────────────────
         for prefix in self.BYPASS_PATH_PREFIXES:
-            if path.startswith(prefix):
+            path = path.rstrip("/") or "/"
+            prefix = prefix.rstrip("/") or "/"
+            path = path.rstrip("/") or "/"
+            if path == prefix or path.startswith(prefix + "/"):
                 return self.get_response(request)
 
         user = request.user
@@ -76,24 +75,36 @@ class RBACMiddleware:
         # ─────────────────────────────────────────────────────
         operation = resolve_api_operation(request)
         if not operation:
-            raise RBACPermissionDenied(
-                violation_type=RBACPermissionDenied.API_NOT_REGISTERED,
-                detail=(
-                    f"The API endpoint '{request.method} {path}' is not registered "
-                    "in the system. Access is denied."
-                ),
+            # raise RBACPermissionDenied(
+            #     violation_type=RBACPermissionDenied.API_NOT_REGISTERED,
+            #     detail=(
+            #         f"The API endpoint '{request.method} {path}' is not registered "
+            #         "in the system. Access is denied."
+            #     ),
+            # )
+            return JsonResponse(
+                {"data": {}, "success": False,
+                 "error": "User is not authorized",
+                 "message": "User is not authorized"},
+                status=401
             )
 
         # ─────────────────────────────────────────────────────
         # 4. Platform-level API disable
         # ─────────────────────────────────────────────────────
         if not operation.is_enabled:
-            raise RBACPermissionDenied(
-                violation_type=RBACPermissionDenied.API_DISABLED_GLOBALLY,
-                detail=(
-                    f"The API endpoint '{request.method} {path}' has been disabled "
-                    "globally by the platform administrator."
-                ),
+            # raise RBACPermissionDenied(
+            #     violation_type=RBACPermissionDenied.API_DISABLED_GLOBALLY,
+            #     detail=(
+            #         f"The API endpoint '{request.method} {path}' has been disabled "
+            #         "globally by the platform administrator."
+            #     ),
+            # )
+            return JsonResponse(
+                {"data": {}, "success": False,
+                 "error": "User is not authorized",
+                 "message": "User is not authorized"},
+                status=401
             )
 
         # ─────────────────────────────────────────────────────
@@ -107,54 +118,84 @@ class RBACMiddleware:
             ).first()
 
             if not tm:
-                raise RBACPermissionDenied(
-                    violation_type=RBACPermissionDenied.TENANT_NOT_SUBSCRIBED,
-                    detail=(
-                        f"Tenant '{tenant}' does not have an active subscription "
-                        f"to the module '{operation.endpoint.module}'. Access is denied."
-                    ),
+                # raise RBACPermissionDenied(
+                #     violation_type=RBACPermissionDenied.TENANT_NOT_SUBSCRIBED,
+                #     detail=(
+                #         f"Tenant '{tenant}' does not have an active subscription "
+                #         f"to the module '{operation.endpoint.module}'. Access is denied."
+                #     ),
+                # )
+                return JsonResponse(
+                    {"data": {}, "success": False,
+                     "error": "User is not authorized",
+                     "message": "User is not authorized"},
+                    status=401
                 )
 
             if not tm.is_enabled:
-                raise RBACPermissionDenied(
-                    violation_type=RBACPermissionDenied.MODULE_DISABLED,
-                    detail=(
-                        f"Module '{operation.endpoint.module}' has been disabled "
-                        f"for tenant '{tenant}' by the tenant administrator."
-                    ),
+                # raise RBACPermissionDenied(
+                #     violation_type=RBACPermissionDenied.MODULE_DISABLED,
+                #     detail=(
+                #         f"Module '{operation.endpoint.module}' has been disabled "
+                #         f"for tenant '{tenant}' by the tenant administrator."
+                #     ),
+                # )
+                return JsonResponse(
+                    {"data": {}, "success": False,
+                     "error": "User is not authorized",
+                     "message": "User is not authorized"},
+                    status=401
                 )
 
             if tm.expiration_date and tm.expiration_date < date.today():
-                raise RBACPermissionDenied(
-                    violation_type=RBACPermissionDenied.SUBSCRIPTION_EXPIRED,
-                    detail=(
-                        f"Tenant '{tenant}' subscription for module "
-                        f"'{operation.endpoint.module}' expired on {tm.expiration_date}."
-                    ),
+                # raise RBACPermissionDenied(
+                #     violation_type=RBACPermissionDenied.SUBSCRIPTION_EXPIRED,
+                #     detail=(
+                #         f"Tenant '{tenant}' subscription for module "
+                #         f"'{operation.endpoint.module}' expired on {tm.expiration_date}."
+                #     ),
+                # )
+                return JsonResponse(
+                    {"data": {}, "success": False,
+                     "error": "User is not authorized",
+                     "message": "User is not authorized"},
+                    status=401
                 )
 
         # ─────────────────────────────────────────────────────
         # 6. Tenant-level API override
         # ─────────────────────────────────────────────────────
         if tenant_api_disabled(tenant, operation):
-            raise RBACPermissionDenied(
-                violation_type=RBACPermissionDenied.API_DISABLED_FOR_TENANT,
-                detail=(
-                    f"The API endpoint '{request.method} {path}' has been "
-                    f"disabled by the administrator for tenant '{tenant}'."
-                ),
+            # raise RBACPermissionDenied(
+            #     violation_type=RBACPermissionDenied.API_DISABLED_FOR_TENANT,
+            #     detail=(
+            #         f"The API endpoint '{request.method} {path}' has been "
+            #         f"disabled by the administrator for tenant '{tenant}'."
+            #     ),
+            # )
+            return JsonResponse(
+                {"data": {}, "success": False,
+                 "error": "User is not authorized",
+                 "message": "User is not authorized"},
+                status=401
             )
 
         # ─────────────────────────────────────────────────────
         # 7. User-level explicit API block  (highest-priority deny)
         # ─────────────────────────────────────────────────────
         if user_api_blocked(tenant, user, operation):
-            raise RBACPermissionDenied(
-                violation_type=RBACPermissionDenied.API_BLOCKED_FOR_USER,
-                detail=(
-                    f"User '{user}' has been explicitly blocked from accessing "
-                    f"'{request.method} {path}'."
-                ),
+            # raise RBACPermissionDenied(
+            #     violation_type=RBACPermissionDenied.API_BLOCKED_FOR_USER,
+            #     detail=(
+            #         f"User '{user}' has been explicitly blocked from accessing "
+            #         f"'{request.method} {path}'."
+            #     ),
+            # )
+            return JsonResponse(
+                {"data": {}, "success": False,
+                 "error": "User is not authorized",
+                 "message": "User is not authorized"},
+                status=401
             )
 
         # ─────────────────────────────────────────────────────
@@ -166,12 +207,18 @@ class RBACMiddleware:
         )
 
         if not action_code:
-            raise RBACPermissionDenied(
-                violation_type=RBACPermissionDenied.UNKNOWN_ACTION,
-                detail=(
-                    f"Cannot map HTTP method '{request.method}' to a permission "
-                    "action code. The endpoint may be misconfigured."
-                ),
+            # raise RBACPermissionDenied(
+            #     violation_type=RBACPermissionDenied.UNKNOWN_ACTION,
+            #     detail=(
+            #         f"Cannot map HTTP method '{request.method}' to a permission "
+            #         "action code. The endpoint may be misconfigured."
+            #     ),
+            # )
+            return JsonResponse(
+                {"data": {}, "success": False,
+                 "error": "User is not authorized",
+                 "message": "User is not authorized"},
+                status=401
             )
 
         # ─────────────────────────────────────────────────────
@@ -200,16 +247,22 @@ class RBACMiddleware:
         # ─────────────────────────────────────────────────────
         # 10. Final deny  (default-deny policy)
         # ─────────────────────────────────────────────────────
-        raise RBACPermissionDenied(
-            violation_type=RBACPermissionDenied.PERMISSION_DENIED,
-            detail=(
-                f"User '{user}' does not have '{action_code}' permission on "
-                f"module '{operation.endpoint.module}'"
-                + (
-                    f" / submodule '{operation.endpoint.submodule}'"
-                    if operation.endpoint.submodule
-                    else ""
-                )
-                + f" required to access '{request.method} {path}'."
-            ),
+        # raise RBACPermissionDenied(
+        #     violation_type=RBACPermissionDenied.PERMISSION_DENIED,
+        #     detail=(
+        #         f"User '{user}' does not have '{action_code}' permission on "
+        #         f"module '{operation.endpoint.module}'"
+        #         + (
+        #             f" / submodule '{operation.endpoint.submodule}'"
+        #             if operation.endpoint.submodule
+        #             else ""
+        #         )
+        #         + f" required to access '{request.method} {path}'."
+        #     ),
+        # )
+        return JsonResponse(
+            {"data": {}, "success": False,
+             "error": "User is not authorized",
+             "message": "User is not authorized"},
+            status=401
         )

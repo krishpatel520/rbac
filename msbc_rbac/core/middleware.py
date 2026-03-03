@@ -2,7 +2,7 @@ from django.utils.deprecation import MiddlewareMixin
 from django.apps import apps
 from django.conf import settings
 
-from core.tenant_context import (
+from msbc_rbac.core.tenant_context import (
     set_current_tenant,
     clear_current_tenant,
 )

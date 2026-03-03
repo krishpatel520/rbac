@@ -1,0 +1,8 @@
+exclude msbc_rbac/core/views.py
+exclude msbc_rbac/core/urls.py
+exclude msbc_rbac/core/api/*
+exclude msbc_rbac/core/migrations/*
+exclude msbc_rbac/accounts/views.py
+exclude msbc_rbac/accounts/urls.py
+exclude msbc_rbac/accounts/api/*
+exclude msbc_rbac/accounts/migrations/*

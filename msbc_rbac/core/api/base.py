@@ -1,6 +1,5 @@
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
-from core.services.permission_api_resolver import check_user_permission, DENY
 
 
 

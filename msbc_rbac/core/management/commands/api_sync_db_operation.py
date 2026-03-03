@@ -4,7 +4,7 @@ from django.urls import get_resolver, URLPattern, URLResolver
 from rest_framework.views import APIView
 import re
 
-from core.models import ApiEndpoint, ApiOperation, Module, SubModule
+from msbc_rbac.core.models import ApiEndpoint, ApiOperation, Module, SubModule
 
 
 class Command(BaseCommand):
@@ -37,7 +37,7 @@ class Command(BaseCommand):
         self._collect_urlpatterns(resolver.url_patterns, urlpatterns, "")
 
         system_module = self._get_or_create_module("SYSTEM", "System")
-        
+
         created_endpoints = 0
         created_operations = 0
         updated_module_map = 0
@@ -66,7 +66,7 @@ class Command(BaseCommand):
 
             # Update module mapping if changed
             if not ep_created and (
-                endpoint.module != module_obj or endpoint.submodule != submodule_obj
+                    endpoint.module != module_obj or endpoint.submodule != submodule_obj
             ):
                 endpoint.module = module_obj
                 endpoint.submodule = submodule_obj
@@ -89,7 +89,7 @@ class Command(BaseCommand):
                     std_action = 'update'
                 elif action_name in ['destroy']:
                     std_action = 'delete'
-                
+
                 # Format: submodule.action (e.g., enquiry.view, enquiry.qualify)
                 permission_code = std_action
                 if submodule_obj:
@@ -114,14 +114,36 @@ class Command(BaseCommand):
             f"Module mappings updated: {updated_module_map}"
         ))
 
+    # def _collect_urlpatterns(self, patterns, urlpatterns, prefix):
+    #     for pattern in patterns:
+    #         if isinstance(pattern, URLPattern):
+    #             # pattern.pattern is usually a regex or a path object
+    #             urlpatterns.append((prefix + str(pattern.pattern), pattern.callback))
+    #         elif isinstance(pattern, URLResolver):
+    #             self._collect_urlpatterns(
+    #                 pattern.url_patterns, urlpatterns, prefix + str(pattern.pattern)
+    #             )
+
     def _collect_urlpatterns(self, patterns, urlpatterns, prefix):
         for pattern in patterns:
+            raw = str(pattern.pattern)
+
+            # Strip regex markers early
+            if raw.startswith("^"):
+                raw = raw[1:]
+            if raw.endswith("$"):
+                raw = raw[:-1]
+
+            full_path = prefix + raw
+
             if isinstance(pattern, URLPattern):
-                # pattern.pattern is usually a regex or a path object
-                urlpatterns.append((prefix + str(pattern.pattern), pattern.callback))
+                urlpatterns.append((full_path, pattern.callback))
+
             elif isinstance(pattern, URLResolver):
                 self._collect_urlpatterns(
-                    pattern.url_patterns, urlpatterns, prefix + str(pattern.pattern)
+                    pattern.url_patterns,
+                    urlpatterns,
+                    full_path
                 )
 
     def _resolve_module_from_callback(self, callback):
@@ -152,38 +174,68 @@ class Command(BaseCommand):
 
         return module_obj, submodule_obj
 
+    # def _normalize_path(self, raw_path):
+    #     """
+    #     Convert Django/DRF path patterns to RBAC standard {pk} format.
+    #     """
+    #     path = raw_path
+    #
+    #     # 1. Strip regex start/end markers
+    #     if path.startswith('^'): path = path[1:]
+    #     if path.endswith('$'): path = path[:-1]
+    #
+    #     # 2. Handle named groups like (?P<pk>[^/.]+) -> {pk}
+    #     path = re.sub(r'\(\?P<(\w+)>[^)]+\)', r'{\1}', path)
+    #
+    #     # 3. Handle <int:pk> or <pk>
+    #     path = re.sub(r'<\w+:(\w+)>', r'{\1}', path)
+    #     path = re.sub(r'<(\w+)>', r'{\1}', path)
+    #
+    #     # 4. Strip format extension (.?P<format>[a-z0-9]+)/?
+    #     path = re.sub(r'\.?\(\?P<format>[^)]+\)/\?', '', path)
+    #     path = re.sub(r'\.{\w+}', '', path)  # remove .{format}
+    #
+    #     # 5. Clean up escapes and ensure leading slash
+    #     path = path.replace('\\', '')
+    #     if not path.startswith('/'): path = '/' + path
+    #
+    #     # 6. Final rstrip
+    #     return path.rstrip("/") if path != "/" else "/"
+
     def _normalize_path(self, raw_path):
-        """
-        Convert Django/DRF path patterns to RBAC standard {pk} format.
-        """
         path = raw_path
-        
+
         # 1. Strip regex start/end markers
-        if path.startswith('^'): path = path[1:]
-        if path.endswith('$'): path = path[:-1]
-        
-        # 2. Handle named groups like (?P<pk>[^/.]+) -> {pk}
+        if path.startswith('^'):
+            path = path[1:]
+        if path.endswith('$'):
+            path = path[:-1]
+
+        # 🔥 REMOVE optional trailing slash
+        path = path.replace('/?', '/')
+
+        # 2. Handle named groups (?P<pk>[^/.]+) -> {pk}
         path = re.sub(r'\(\?P<(\w+)>[^)]+\)', r'{\1}', path)
-        
+
         # 3. Handle <int:pk> or <pk>
         path = re.sub(r'<\w+:(\w+)>', r'{\1}', path)
         path = re.sub(r'<(\w+)>', r'{\1}', path)
-        
-        # 4. Strip format extension (.?P<format>[a-z0-9]+)/?
+
+        # 4. Remove format suffix
         path = re.sub(r'\.?\(\?P<format>[^)]+\)/\?', '', path)
-        path = re.sub(r'\.{\w+}', '', path) # remove .{format}
-        
-        # 5. Clean up escapes and ensure leading slash
+
+        # 5. Clean escapes
         path = path.replace('\\', '')
-        if not path.startswith('/'): path = '/' + path
-        
-        # 6. Final rstrip
-        return path.rstrip("/") if path != "/" else "/"
+
+        if not path.startswith('/'):
+            path = '/' + path
+
+        return path.rstrip("/") + "/"
 
     def _resolve_actions(self, callback):
         if hasattr(callback, "actions"):
             return callback.actions
-        
+
         view_cls = getattr(callback, "cls", None)
         if view_cls:
             res = {}
