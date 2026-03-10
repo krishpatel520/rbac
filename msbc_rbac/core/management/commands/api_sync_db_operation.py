@@ -149,58 +149,38 @@ class Command(BaseCommand):
     def _resolve_module_from_callback(self, callback):
         """
         Detect Django app from callback and read RBAC_MODULE / RBAC_SUBMODULE
+        Works even if base ViewSet is from external package
         """
+
         view_cls = getattr(callback, "cls", None)
-        module_path = None
+
+        candidate_modules = []
 
         if view_cls:
-            module_path = view_cls.__module__
+            # Walk inheritance chain
+            for cls in view_cls.__mro__:
+                candidate_modules.append(cls.__module__)
         else:
-            module_path = callback.__module__
+            candidate_modules.append(callback.__module__)
 
-        app_config = apps.get_containing_app_config(module_path)
+        for module_path in candidate_modules:
+            app_config = apps.get_containing_app_config(module_path)
 
-        if not app_config:
-            return None, None
+            if not app_config:
+                continue
 
-        submodule_code = getattr(app_config, "RBAC_SUBMODULE", app_config.label.upper())
-        module_code = getattr(app_config, "RBAC_MODULE", None)
+            module_code = getattr(app_config, "RBAC_MODULE", None)
+            submodule_code = getattr(app_config, "RBAC_SUBMODULE", app_config.label.upper())
 
-        if not module_code:
-            return None, None
+            if not module_code:
+                continue
 
-        module_obj = self._get_or_create_module(module_code, module_code.title())
-        submodule_obj = self._get_or_create_submodule(submodule_code, submodule_code.title())
+            module_obj = self._get_or_create_module(module_code, module_code.title())
+            submodule_obj = self._get_or_create_submodule(submodule_code, submodule_code.title())
 
-        return module_obj, submodule_obj
+            return module_obj, submodule_obj
 
-    # def _normalize_path(self, raw_path):
-    #     """
-    #     Convert Django/DRF path patterns to RBAC standard {pk} format.
-    #     """
-    #     path = raw_path
-    #
-    #     # 1. Strip regex start/end markers
-    #     if path.startswith('^'): path = path[1:]
-    #     if path.endswith('$'): path = path[:-1]
-    #
-    #     # 2. Handle named groups like (?P<pk>[^/.]+) -> {pk}
-    #     path = re.sub(r'\(\?P<(\w+)>[^)]+\)', r'{\1}', path)
-    #
-    #     # 3. Handle <int:pk> or <pk>
-    #     path = re.sub(r'<\w+:(\w+)>', r'{\1}', path)
-    #     path = re.sub(r'<(\w+)>', r'{\1}', path)
-    #
-    #     # 4. Strip format extension (.?P<format>[a-z0-9]+)/?
-    #     path = re.sub(r'\.?\(\?P<format>[^)]+\)/\?', '', path)
-    #     path = re.sub(r'\.{\w+}', '', path)  # remove .{format}
-    #
-    #     # 5. Clean up escapes and ensure leading slash
-    #     path = path.replace('\\', '')
-    #     if not path.startswith('/'): path = '/' + path
-    #
-    #     # 6. Final rstrip
-    #     return path.rstrip("/") if path != "/" else "/"
+        return None, None
 
     def _normalize_path(self, raw_path):
         path = raw_path
