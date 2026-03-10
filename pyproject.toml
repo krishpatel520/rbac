@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "msbc-rbac"
-version = "0.0.8"
+version = "0.0.10"
 description = "A comprehensive Role-Based Access Control (RBAC) system for Django applications with multi-tenant support"
 readme = "README.md"
 requires-python = ">=3.8"
