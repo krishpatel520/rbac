@@ -1,11 +1,11 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from decouple import config
 
 # Configure RBAC_TENANT_MODEL - defaults to 'core.Tenant' if not set
 # Override in your Django settings.py with: RBAC_TENANT_MODEL = 'your_app.YourTenantModel'
-if not hasattr(settings, 'RBAC_TENANT_MODEL'):
-    settings.RBAC_TENANT_MODEL = 'core.Tenant'
+settings.TENANT_MODEL = config('TENANT_MODEL', default='core.Tenant')
 
 
 # ----------------------------
@@ -34,7 +34,7 @@ class Role(models.Model):
     """
     name = models.CharField(max_length=100)
     tenant = models.ForeignKey(
-        settings.RBAC_TENANT_MODEL,
+        settings.TENANT_MODEL,
         on_delete=models.CASCADE
     )
     is_deleted = models.BooleanField(default=False)
@@ -79,7 +79,7 @@ class Module(models.Model):
     Represents a CRM module.
     Examples: CRM, BULK
     """
-    code = models.CharField(primary_key=True,max_length=50, unique = True)
+    code = models.CharField(primary_key=True, max_length=50, unique=True)
     name = models.CharField(max_length=100)
     icon = models.CharField(max_length=50, blank=True, default="")
     order = models.IntegerField(default=0)
@@ -97,7 +97,7 @@ class SubModule(models.Model):
     Represents a CRM sub-module.
     Examples: Enquiry, Quotation, FollowUp, Organization
     """
-    code = models.CharField(primary_key=True,max_length=50, unique=True)
+    code = models.CharField(primary_key=True, max_length=50, unique=True)
     name = models.CharField(max_length=100)
     icon = models.CharField(max_length=50, blank=True, default="")
     order = models.IntegerField(default=0)
@@ -108,6 +108,7 @@ class SubModule(models.Model):
 
     def __str__(self):
         return self.name
+
 
 # class Action(models.Model):
 #     code = models.CharField(max_length=20, unique=True)
@@ -120,7 +121,7 @@ class Permission(models.Model):
     Represents a granular permission (e.g., 'read', 'create', 'approve') 
     associated with a Tenant, Module, and optionally a SubModule.
     """
-    tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE, null=True)
+    tenant = models.ForeignKey(settings.TENANT_MODEL, on_delete=models.CASCADE, null=True)
     module = models.ForeignKey(Module, on_delete=models.CASCADE, null=True)
     submodule = models.ForeignKey(SubModule, null=True, blank=True, on_delete=models.CASCADE)
 
@@ -148,11 +149,11 @@ class ModuleSubModuleMapping(models.Model):
 class TenantModule(models.Model):
     """
     Tracks which Modules (and optionally SubModules) are enabled for a specific Tenant.
-    
+
     Also handles module expiration.
     """
     tenant = models.ForeignKey(
-        settings.RBAC_TENANT_MODEL,
+        settings.TENANT_MODEL,
         on_delete=models.CASCADE,
         related_name="modules",
     )
@@ -172,10 +173,11 @@ class TenantModule(models.Model):
 
         constraints = [
             models.UniqueConstraint(
-                fields=["tenant", "module","submodule"],
+                fields=["tenant", "module", "submodule"],
                 name="unique_tenant_module_submodule",
             )
         ]
+
     def __str__(self):
         return f"{self.tenant} → {self.module}"
 
@@ -211,6 +213,7 @@ class RolePermission(models.Model):
     def __str__(self):
         return f"{self.role} → {self.permission}"
 
+
 class ApiEndpoint(models.Model):
     """
     Represents a backend API endpoint path, linked to a Module and optional SubModule.
@@ -228,7 +231,7 @@ class ApiEndpoint(models.Model):
 class ApiOperation(models.Model):
     """
     Represents a specific HTTP method (GET, POST, etc.) on an ApiEndpoint.
-    
+
     Can be enabled/disabled globally and linked to a specific permission code.
     """
     endpoint = models.ForeignKey(ApiEndpoint, on_delete=models.CASCADE)
@@ -239,6 +242,7 @@ class ApiOperation(models.Model):
     class Meta:
         db_table = "admin_api_operation"
         unique_together = ('endpoint', 'http_method')
+
 
 class TenantApiPermission(models.Model):
     """
@@ -258,7 +262,7 @@ class TenantApiOverride(models.Model):
     Allows disabling specific API operations for a specific Tenant.
     """
     tenant = models.ForeignKey(
-        settings.RBAC_TENANT_MODEL,
+        settings.TENANT_MODEL,
         on_delete=models.CASCADE
     )
     api_operation = models.ForeignKey(ApiOperation, on_delete=models.CASCADE)

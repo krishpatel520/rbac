@@ -6,8 +6,10 @@ from msbc_rbac.core.models import Role, ApiOperation
 from decouple import config
 
 # Configure RBAC_TENANT_MODEL - defaults to 'core.Tenant' if not set
-if not hasattr(settings, 'TENANT_MODEL'):
-    settings.TENANT_MODEL = 'core.Tenant'
+
+settings.TENANT_MODEL = config("TENANT_MODEL", default="core.tenant")
+
+PROJECT_SCOPE = config("PROJECT_SCOPE", default="accounts")
 
 
 class UserManager(BaseUserManager):
@@ -55,7 +57,7 @@ class UserManager(BaseUserManager):
 class User(AbstractUser):
     """
     Custom user model for the RBAC system.
-    
+
     Each user belongs to exactly one tenant (Organization).
     This extends the default Django AbstractUser.
     """
@@ -88,7 +90,7 @@ class User(AbstractUser):
 class UserRole(models.Model):
     """
     Represents the assignment of a Role to a User.
-    
+
     This is a many-to-many relationship model between User and Role.
     """
     user = models.ForeignKey(
@@ -107,7 +109,7 @@ class UserRole(models.Model):
         blank=False,
         null=True,
         on_delete=models.PROTECT,
-        related_name="users",
+        related_name=f"{PROJECT_SCOPE}_users",
     )
 
     class Meta:
@@ -125,7 +127,7 @@ class UserRole(models.Model):
 class UserApiBlock(models.Model):
     """
     Represents a specific API operation blocked for a specific user within a tenant.
-    
+
     This allows for granular restriction of capabilities even if the user's role 
     nominally permits the action.
     """
