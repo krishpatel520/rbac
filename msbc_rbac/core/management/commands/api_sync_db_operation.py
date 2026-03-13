@@ -91,15 +91,13 @@ class Command(BaseCommand):
                     std_action = 'delete'
 
                 # Format: submodule.action (e.g., enquiry.view, enquiry.qualify)
-                permission_code = std_action
-                if submodule_obj:
-                    permission_code = f"{submodule_obj.code.lower()}.{std_action}"
+
 
                 _, created = ApiOperation.objects.get_or_create(
                     endpoint=endpoint,
                     http_method=method.upper(),
                     defaults={
-                        "permission_code": permission_code,
+                        "permission_code": std_action,
                         "is_enabled": True,
                     },
                 )
@@ -114,15 +112,6 @@ class Command(BaseCommand):
             f"Module mappings updated: {updated_module_map}"
         ))
 
-    # def _collect_urlpatterns(self, patterns, urlpatterns, prefix):
-    #     for pattern in patterns:
-    #         if isinstance(pattern, URLPattern):
-    #             # pattern.pattern is usually a regex or a path object
-    #             urlpatterns.append((prefix + str(pattern.pattern), pattern.callback))
-    #         elif isinstance(pattern, URLResolver):
-    #             self._collect_urlpatterns(
-    #                 pattern.url_patterns, urlpatterns, prefix + str(pattern.pattern)
-    #             )
 
     def _collect_urlpatterns(self, patterns, urlpatterns, prefix):
         for pattern in patterns:

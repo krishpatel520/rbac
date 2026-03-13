@@ -12,8 +12,11 @@ Priority Order (Deny Wins):
  8. Role → Permission check  (module-level, then submodule-level)
  9. Default deny
 """
+import logging
+import threading
 from datetime import date
 from django.conf import settings
+from django.db.models import Q
 
 from msbc_rbac.core.models import TenantModule
 from django.http import JsonResponse
@@ -75,13 +78,8 @@ class RBACMiddleware:
         # ─────────────────────────────────────────────────────
         operation = resolve_api_operation(request)
         if not operation:
-            # raise RBACPermissionDenied(
-            #     violation_type=RBACPermissionDenied.API_NOT_REGISTERED,
-            #     detail=(
-            #         f"The API endpoint '{request.method} {path}' is not registered "
-            #         "in the system. Access is denied."
-            #     ),
-            # )
+            logging.error(f"{threading.get_native_id()} No operation associated with user {user} and tenant {tenant} ")
+
             return JsonResponse(
                 {"data": {}, "success": False,
                  "error": "User is not authorized",
@@ -93,13 +91,9 @@ class RBACMiddleware:
         # 4. Platform-level API disable
         # ─────────────────────────────────────────────────────
         if not operation.is_enabled:
-            # raise RBACPermissionDenied(
-            #     violation_type=RBACPermissionDenied.API_DISABLED_GLOBALLY,
-            #     detail=(
-            #         f"The API endpoint '{request.method} {path}' has been disabled "
-            #         "globally by the platform administrator."
-            #     ),
-            # )
+            logging.error(f"{threading.get_native_id()} No operation is enabled {user} and tenant {tenant} ")
+
+
             return JsonResponse(
                 {"data": {}, "success": False,
                  "error": "User is not authorized",
@@ -113,52 +107,43 @@ class RBACMiddleware:
         if tenant:
             tm = TenantModule.objects.filter(
                 tenant=tenant,
-                module=operation.endpoint.module,
-                submodule=operation.endpoint.submodule,
+                module=operation.endpoint.module
+            ).filter(
+                Q(submodule__isnull=True) |
+                Q(submodule=operation.endpoint.submodule)
             ).first()
 
             if not tm:
-                # raise RBACPermissionDenied(
-                #     violation_type=RBACPermissionDenied.TENANT_NOT_SUBSCRIBED,
-                #     detail=(
-                #         f"Tenant '{tenant}' does not have an active subscription "
-                #         f"to the module '{operation.endpoint.module}'. Access is denied."
-                #     ),
-                # )
+                logging.error(
+                    f"{threading.get_native_id()} No module found for tenant {user} and tenant {tenant} "
+                )
+
                 return JsonResponse(
                     {"data": {}, "success": False,
-                     "error": "User is not authorized",
-                     "message": "User is not authorized"},
+                     "error": "No Module associated . Kindly connect with provider",
+                     "message": "No Module associated . Kindly connect with provider"},
                     status=401
                 )
 
             if not tm.is_enabled:
-                # raise RBACPermissionDenied(
-                #     violation_type=RBACPermissionDenied.MODULE_DISABLED,
-                #     detail=(
-                #         f"Module '{operation.endpoint.module}' has been disabled "
-                #         f"for tenant '{tenant}' by the tenant administrator."
-                #     ),
-                # )
+                logging.error(
+                    f"{threading.get_native_id()} Module is disabled {user} and tenant {tenant} "
+                )
                 return JsonResponse(
                     {"data": {}, "success": False,
-                     "error": "User is not authorized",
-                     "message": "User is not authorized"},
+                     "error": "Module is disabled . Kindly connect with provider",
+                     "message": "Module is disabled . Kindly connect with provider"},
                     status=401
                 )
 
             if tm.expiration_date and tm.expiration_date < date.today():
-                # raise RBACPermissionDenied(
-                #     violation_type=RBACPermissionDenied.SUBSCRIPTION_EXPIRED,
-                #     detail=(
-                #         f"Tenant '{tenant}' subscription for module "
-                #         f"'{operation.endpoint.module}' expired on {tm.expiration_date}."
-                #     ),
-                # )
+                logging.error(
+                    f"{threading.get_native_id()} Tenant module is expired {user} and tenant {tenant} ")
+
                 return JsonResponse(
                     {"data": {}, "success": False,
-                     "error": "User is not authorized",
-                     "message": "User is not authorized"},
+                     "error": "Module license expired . Kindly connect with provider",
+                     "message": "Module license expired . Kindly connect with provider"},
                     status=401
                 )
 
@@ -166,17 +151,13 @@ class RBACMiddleware:
         # 6. Tenant-level API override
         # ─────────────────────────────────────────────────────
         if tenant_api_disabled(tenant, operation):
-            # raise RBACPermissionDenied(
-            #     violation_type=RBACPermissionDenied.API_DISABLED_FOR_TENANT,
-            #     detail=(
-            #         f"The API endpoint '{request.method} {path}' has been "
-            #         f"disabled by the administrator for tenant '{tenant}'."
-            #     ),
-            # )
+
+            logging.error(f"{threading.get_native_id()} API disabled for tenant {user} and tenant {tenant} ")
+
             return JsonResponse(
                 {"data": {}, "success": False,
-                 "error": "User is not authorized",
-                 "message": "User is not authorized"},
+                 "error": "API is disabled . Kindly connect with provider",
+                 "message": "API is disabled . Kindly connect with provider""API is disabled . Kindly connect with provider"},
                 status=401
             )
 
@@ -184,17 +165,13 @@ class RBACMiddleware:
         # 7. User-level explicit API block  (highest-priority deny)
         # ─────────────────────────────────────────────────────
         if user_api_blocked(tenant, user, operation):
-            # raise RBACPermissionDenied(
-            #     violation_type=RBACPermissionDenied.API_BLOCKED_FOR_USER,
-            #     detail=(
-            #         f"User '{user}' has been explicitly blocked from accessing "
-            #         f"'{request.method} {path}'."
-            #     ),
-            # )
+            logging.error(f"{threading.get_native_id()} API is blocked for user {user} and tenant {tenant} ")
+
             return JsonResponse(
                 {"data": {}, "success": False,
-                 "error": "User is not authorized",
-                 "message": "User is not authorized"},
+                 "error": "Admin blocked you. Kindly connect with admin",
+                 "message": "Admin blocked you. Kindly connect with admin"
+                 },
                 status=401
             )
 
@@ -202,22 +179,17 @@ class RBACMiddleware:
         # 8. Resolve permission action code
         # ─────────────────────────────────────────────────────
         action_code = (
-            operation.permission_code
-            or HTTP_METHOD_ACTION_MAP.get(request.method.upper())
+                operation.permission_code
+                or HTTP_METHOD_ACTION_MAP.get(request.method.upper())
         )
 
         if not action_code:
-            # raise RBACPermissionDenied(
-            #     violation_type=RBACPermissionDenied.UNKNOWN_ACTION,
-            #     detail=(
-            #         f"Cannot map HTTP method '{request.method}' to a permission "
-            #         "action code. The endpoint may be misconfigured."
-            #     ),
-            # )
+            logging.error(f"{threading.get_native_id()} Action code mismatch {user} and tenant {tenant} ")
+
             return JsonResponse(
                 {"data": {}, "success": False,
-                 "error": "User is not authorized",
-                 "message": "User is not authorized"},
+                 "error": "Action code mismatch. Kindly connect with provider",
+                 "message": "Action code mismatch. Kindly connect with provider"},
                 status=401
             )
 
@@ -247,22 +219,11 @@ class RBACMiddleware:
         # ─────────────────────────────────────────────────────
         # 10. Final deny  (default-deny policy)
         # ─────────────────────────────────────────────────────
-        # raise RBACPermissionDenied(
-        #     violation_type=RBACPermissionDenied.PERMISSION_DENIED,
-        #     detail=(
-        #         f"User '{user}' does not have '{action_code}' permission on "
-        #         f"module '{operation.endpoint.module}'"
-        #         + (
-        #             f" / submodule '{operation.endpoint.submodule}'"
-        #             if operation.endpoint.submodule
-        #             else ""
-        #         )
-        #         + f" required to access '{request.method} {path}'."
-        #     ),
-        # )
+        logging.error(f"{threading.get_native_id()} Not authorized to perform action {user} and tenant {tenant} ")
+
         return JsonResponse(
             {"data": {}, "success": False,
-             "error": "User is not authorized",
-             "message": "User is not authorized"},
+             "error": "User is not authorized to perform this action",
+             "message": "User is not authorized to perform this action"},
             status=401
         )
