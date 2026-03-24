@@ -1,9 +1,11 @@
 from rest_framework import serializers
 from rest_framework.routers import DefaultRouter
 from rest_framework.response import Response
+from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view, permission_classes
 
 from msbc_rbac.core.api.base import RBACViewSet
-from msbc_rbac.core.models import Role, Tenant, Module
+from msbc_rbac.core.models import Permission, Role, Tenant, Module
 from msbc_rbac.accounts.models import User
 
 # 1. Serializers
@@ -79,3 +81,20 @@ router.register(r'roles', RoleViewSet, basename='role')
 router.register(r'users', UserViewSet, basename='user')
 # router.register(r'tenants', TenantViewSet, basename='tenant') # Optional
 # router.register(r'modules', ModuleViewSet, basename='module') # Optional
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def role_permissions(request, role_id):
+    """Return flat list of permission codes for a given role_id"""
+    try:
+        role = Role.objects.get(id=role_id, is_deleted=False)
+    except Role.DoesNotExist:
+        return Response({'error': 'Role not found'}, status=404)
+    perms = (
+        Permission.objects
+        .filter(roles__role=role, roles__allowed=True, is_active=True)
+        .values_list('code', flat=True)
+        .distinct()
+    )
+    return Response({'role_id': role_id, 'permissions': list(perms)})

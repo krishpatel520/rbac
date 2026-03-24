@@ -12,7 +12,7 @@ from django.http import Http404
 from rest_framework.response import Response
 from rest_framework.views import exception_handler
 
-from core.exceptions import RBACPermissionDenied
+from msbc_rbac.core.exceptions import RBACPermissionDenied
 
 logger = logging.getLogger(__name__)
 

@@ -88,7 +88,7 @@ def obtain_auth_token(request):
             'token': token.key,
             'user_id': user.id,
             'username': user.username,
-            'tenant': user.tenant.name,
+            'tenant': user.tenant.name if user.tenant else None,
         }, status=status.HTTP_200_OK)
     else:
         return Response(

@@ -62,7 +62,7 @@ REST_FRAMEWORK = {
         'rest_framework.authentication.TokenAuthentication',  # Try token first
         'rest_framework.authentication.SessionAuthentication',  # Fallback to session
     ],
-    'EXCEPTION_HANDLER': 'core.drf_exception_handler.custom_exception_handler',
+    'EXCEPTION_HANDLER': 'msbc_rbac.core.drf_exception_handler.custom_exception_handler',
 }
 
 
@@ -223,3 +223,18 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 AUTH_USER_MODEL = 'accounts.User'
 # TENANT_MODEL = 'core.Tenant'
+
+
+# ------------------------------------------------------------------------------
+# RBAC MIDDLEWARE — Paths skipped by RBACMiddleware entirely
+# Add any public / infra endpoints that must bypass permission checks.
+# ------------------------------------------------------------------------------
+
+BYPASS_PATH_PREFIXES = [
+    '/admin',
+    '/static',
+    '/accounts',       # session login / logout
+    '/api/auth',       # token endpoint
+    '/api/schema',     # OpenAPI schema
+    '/api/docs',       # Swagger UI
+]
