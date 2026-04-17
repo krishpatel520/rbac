@@ -1,278 +1,140 @@
-# Role Based Access Control (RBAC)
+# 🛡️ MSBC RBAC (Role-Based Access Control)
 
-A robust, multi-tenant Role-Based Access Control (RBAC) system for Django applications.
+![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)
+![Django 3.2+](https://img.shields.io/badge/django-3.2+-brightgreen.svg)
+![Nexus Registry](https://img.shields.io/badge/registry-Nexus%20Private-orange.svg)
+![Status](https://img.shields.io/badge/status-Production%20Ready-success.svg)
 
----
+A centralized, enterprise-grade Role-Based Access Control (RBAC) package designed specifically for robust multi-tenant architectures and microservices. 
 
-## Overview
-
-This package provides a comprehensive RBAC solution designed for multi-tenant SaaS applications. It allows for granular permission management at the **Module**, **SubModule**, and **API Operation** levels.
-
-### Key Features
-
-- **Multi-tenancy Support** — Built-in tenant isolation for users and data.
-- **Granular Permissions** — Define permissions (read, create, update, delete, approve) per role.
-- **Module & SubModule Management** — Organize system features into modules and submodules.
-- **API-Level Security** — Block specific API operations for individual users or entire tenants.
-- **RBAC Middleware** — Automatically enforces permission checks on incoming requests.
-- **Tenant Middleware** — Automatically resolves and sets the current tenant context per request.
+> **⚠️ IMPORTANT ORGANIZATIONAL CONTEXT**
+> This RBAC core system has been officially built, packaged, and **uploaded to the company's private package registry (Nexus Server)**. It is actively consumed as a core dependency across many different applications and microservices to ensure unified authentication, authorization, and tenant isolation policies.
 
 ---
 
-## Architecture
+## 🌟 Core Features
 
-### Admin Configuration
-
-All configuration of the RBAC system — including **roles**, **permissions**, **modules**, **submodules**, **user-role mappings**, and **tenant setup** — is currently managed through the **default Django Admin** interface.
-
-The default admin acts as the central control layer, allowing administrators to:
-
-- Define and manage `Modules` and `SubModules`
-- Create `Permissions` scoped to specific modules and operations (read, create, update, delete, approve)
-- Define `Roles` and assign `Permissions` to them via `RolePermission`
-- Assign `Roles` to `Users` via `UserRole`
-- Configure tenant-level API blocks via `TenantBlockedOperation`
-- Configure user-level API blocks via `UserBlockedOperation`
-
-> **Note:** A dedicated, standalone Admin Service with its own set of REST APIs and UI is planned for the future (refer lightly to `admin_service_guide.md` for architectural concepts). For now, the current Django Admin is fully capable of managing all RBAC state and should be used as the primary configuration tool.
+- **Multi-Tenant Architecture**: Deep database and request isolation layer.
+- **Granular API Security**: Route-based and HTTP method-based control for `read`, `create`, `update`, `delete`, and `approve`.
+- **Module & SubModule Hierarchy**: Organize application components consistently across the board.
+- **Middleware-Driven Safety**: `RBACMiddleware` and `CurrentTenantMiddleware` intercept, validate, and isolate context explicitly before view execution.
+- **Microservices Ready**: Easily installable as a `.whl` or `tar.gz` package via Pip. It is decoupled from domain logic to be securely deployed on various independent Django services.
+- **Dynamic API Blocking**: Supports full tenant-level API path blocking (`TenantBlockedOperation`) and individualized edge-case rule setting (`UserBlockedOperation`).
 
 ---
 
-## Installation
+## 🚀 Detailed Integration Flow for Microservices
 
-### As a Python Package (from source)
+Because this project is consumed as a centralized package by other microservices (like the Auth Service, User Service, etc.), follow this exact flow to integrate RBAC into any new Django service.
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository_url>
-   cd django_rbac_project
-   ```
+### Step 1: Install the Package from Nexus
+Point your package manager to the internal Nexus repository and install `msbc-rbac`:
+```bash
+# Connect to our private registry and install the core framework
+pip install msbc-rbac --extra-index-url https://nexus.company.local/repository/pypi/simple
+```
 
-2. **Create and activate a virtual environment:**
-   ```bash
-   python -m venv venv
-   source venv/bin/activate   # Windows: venv\Scripts\activate
-   ```
+### Step 2: Configure `settings.py`
 
-3. **Install in editable mode:**
-   ```bash
-   pip install -e .
-   ```
-
-4. **Apply migrations:**
-   ```bash
-   python manage.py migrate
-   ```
-
-5. **Run the development server:**
-   ```bash
-   python manage.py runserver
-   ```
-
-### Using Docker (Recommended for Deployment)
-
-See the [Docker Setup](#docker-setup) section below.
-
----
-
-## Configuration
-
-### settings.py
+Register the RBAC apps and configure your model mappings.
 
 ```python
 INSTALLED_APPS = [
-    # ...
+    # ... your native apps
     'rest_framework',
     'rest_framework.authtoken',
-    'drf_spectacular',
-    'accounts',
-    'core',
-    # ...
+    
+    # 🔌 Inject MSBC RBAC Modules
+    'msbc_rbac.accounts',
+    'msbc_rbac.core',
 ]
 
+# Map your tenant and auth models to ensure the RBAC system binds correctly
 AUTH_USER_MODEL = 'accounts.User'
-RBAC_TENANT_MODEL = 'core.Tenant'  # Optional override
+RBAC_TENANT_MODEL = 'core.Tenant'  # Maps context to package architecture
 ```
 
-### Middleware
-
-Add middlewares in this order:
+### Step 3: Add Critical Middlewares
+**Order is incredibly important.** Tenant resolution must execute prior to RBAC permission evaluations.
 
 ```python
 MIDDLEWARE = [
-    # ... Django defaults ...
-    'core.middleware.CurrentTenantMiddleware',   # Resolves tenant context
-    # ... message/clickjacking middleware ...
-    'core.services.RBACMiddleware.RBACMiddleware',    # Enforces RBAC permissions
-    'core.exception_middleware.JSONExceptionMiddleware',  # Must be last
+    # ... standard django core middlewares ...
+    
+    # 1. Resolves tenant context from headers/token
+    'msbc_rbac.core.middleware.CurrentTenantMiddleware',  
+    
+    # 2. Enforces RBAC permissions based on DB policies
+    'msbc_rbac.core.services.RBACMiddleware.RBACMiddleware', 
+    
+    # 3. Ensures JSON error adherence on failure
+    'msbc_rbac.core.exception_middleware.JSONExceptionMiddleware', 
 ]
 ```
 
-### Database (Environment-Driven)
-
-Configure the database via environment variables (especially in Docker):
-
-```python
-import os
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME':     os.environ.get('DB_NAME', 'rbac_project'),
-        'USER':     os.environ.get('DB_USER', 'postgres'),
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-        'HOST':     os.environ.get('DB_HOST', 'localhost'),
-        'PORT':     os.environ.get('DB_PORT', '5432'),
-    }
-}
+### Step 4: Run Package Migrations
+Once bound, you must apply the RBAC database architectures into the microservice's database schema:
+```bash
+python manage.py migrate
 ```
+
+### Step 5: Initialize the API & Permission State
+Depending on the service, you will inject initial tenants, baseline roles, and sync operational scopes (e.g. `api_sync_db_operation`) so the RBAC database mapping recognizes the microservices' endpoints.
 
 ---
 
-## Usage
+## ⚙️ Operations & Usage Flow
+
+Once integrated, developers and administrators leverage the following operational flow to manage security:
 
 ### 1. Defining Modules & Permissions
-
-Use the **Django Admin** interface (at `/admin/`) to define `Modules`, `SubModules`, and `Permissions` scoped to specific operations.
+Administrators use the **Django Admin** interface (`/admin/`) on the centralized MSBC Admin Gateway to define `Modules`, `SubModules`, and `Permissions` scoped to operations (e.g., read, update, delete).
 
 ### 2. Creating Roles
-
-Define `Roles` (e.g., *Manager*, *Sales Executive*) and attach `Permissions` via `RolePermission`.
+Administrators define cross-system `Roles` (e.g., *Manager*, *Sales Executive*) and structurally attach `Permissions` via `RolePermission`.
 
 ### 3. Assigning Roles to Users
+A user identity is mapped to a role strictly using `UserRole`. Users can securely possess multiple varying roles across disparate tenants within the SaaS.
 
-Assign users to roles using `UserRole`. A user can have multiple roles across tenants.
+### 4. Automatic API Enforcement 
+The `RBACMiddleware` automatically validates identity vs. permissions on strictly typed endpoints (`GET`, `POST`, `PUT`, `DELETE`). 
+**No manual decorators per view are required anymore.** The service inherently knows if a User in a Tenant context has `write` access based purely on the `settings.py` binding flow.
 
-### 4. Checking Permissions in Code
-
-#### In Views / Business Logic
-
+### 5. Manual Permission Handling (Code Level)
+If you require code-level conditional checking (for rendering templates or executing complex secondary logic):
 ```python
-from core.utils import check_permission
+from msbc_rbac.core.utils import check_permission
 
-if check_permission(user, 'invoice', 'read'):
-    # Allow access
+if check_permission(user, 'reporting', 'read'):
+    # Generate confidential payload
 ```
 
-#### Via API (Automatic Enforcement)
-
-The `RBACMiddleware` automatically checks permissions on every request based on the endpoint and HTTP method — no manual decorator needed per view.
-
-### 5. Blocking Operations
-
-Use `TenantBlockedOperation` to block API paths for an entire tenant, or `UserBlockedOperation` to block them for a specific user, regardless of role.
+### 6. Dynamic Operation Blocking
+Edge cases exist where standard role models fail. The system handles this via:
+- `TenantBlockedOperation`: Blankets API path denial to an entire tenant regardless of user roles.
+- `UserBlockedOperation`: Granularly blocks an API explicitly for a specific user identity.
 
 ---
 
-## Docker Setup
+## 🐳 Dockerized Internal Environments
 
-This project supports two independent deployment modes from the same codebase:
+Both the internal API gateway/administration applications and connected services leverage isolated configurations.
 
-```
-Same application
-├── Personal deployment   → local Docker build (no registry needed)
-└── Org deployment        → private registry (192.168.71.244:30444) + WSL
-```
-
-> See [`docs/deployment.md`](docs/deployment.md) for the full guide.
-
-### Personal / Local (independent Docker)
-
+**Personal System Execution**
 ```bash
-cp .env.example .env   # fill in credentials
-make local-up          # build from source + start
-make local-logs        # follow logs
-make local-down        # stop
+cp .env.example .env
+make local-up
 ```
 
-### Organisation (WSL + private registry)
-
-**One-time WSL daemon config** — allow the insecure private registry:
-
+**Standard Production (Org Deployment via WSL)**
+Ensures WSL nodes interact with our private registry components securely.
 ```bash
 sudo nano /etc/docker/daemon.json
-# Add: { "insecure-registries": ["192.168.71.244:30444"] }
-sudo service docker restart
-```
-
-**Copy project into WSL filesystem:**
-
-```bash
-cp -r /mnt/c/Users/krish.patel/Desktop/django_rbac_project ~/rbac-admin
-cd ~/rbac-admin
-```
-
-**Build & push, then deploy:**
-
-```bash
-bash scripts/build-org.sh v1.0.0   # build + push
-# Set RBAC_IMAGE_TAG=v1.0.0 in .env
-make org-up                        # pull + start
-```
-
-### Makefile Quick Reference
-
-```
-make help           List all targets
-make local-up       Build from source + start (personal)
-make org-up         Pull from registry + start (org)
-make shell          Django shell in running container
-make migrate        Run DB migrations
-make clean          Remove stopped containers & dangling images
-```
-
-### Environment Variables (.env)
-
-| Variable | Description |
-|---|---|
-| `SECRET_KEY` | Django secret key |
-| `DB_NAME` | Postgres database name |
-| `DB_USER` | Postgres user |
-| `DB_PASSWORD` | Postgres password |
-| `DB_PORT` | Postgres port (inside container) |
-| `DB_EXPOSED_PORT` | Host-side Postgres port (default `5433`) |
-| `RBAC_PORT` | Host-side RBAC service port (default `8002`) |
-| `RBAC_IMAGE_TAG` | Registry image tag to pull (default `latest`) |
-
-
----
-
-## Project Structure
-
-```
-django_rbac_project/
-│
-├── app/                         # application source
-│   ├── accounts/                # Custom User model & authentication
-│   ├── core/                    # RBAC models, middleware, services, APIs
-│   └── rbac_project/            # Django project settings & WSGI
-│
-├── docker/
-│   ├── Dockerfile               # Image definition
-│   ├── docker-compose.yml       # Base — shared DB + service skeleton
-│   ├── docker-compose.local.yml # Personal — builds image from source
-│   └── docker-compose.org.yml   # Org — pulls from private registry
-│
-├── scripts/
-│   ├── build-local.sh           # Build image locally (no registry)
-│   ├── build-org.sh             # Build + push to private registry (WSL)
-│   └── run-dev.sh               # Start / stop local dev stack
-│
-├── docs/
-│   └── deployment.md            # Full deployment guide
-│
-├── entrypoint.sh                # wait-for-db → migrate → collectstatic → gunicorn
-├── gunicorn.conf.py             # Gunicorn worker / timeout / logging config
-├── Makefile                     # Dual-env shortcuts (local-* / org-*)
-├── .env.example                 # Safe-to-commit env template
-├── .env                         # Runtime secrets (never commit)
-├── requirements.txt             # Python dependencies
-└── setup.py                     # Package distribution config
+# Ensure insecure-registries handles corporate internal network tags
+bash scripts/build-org.sh v1.0.0
+make org-up
 ```
 
 ---
 
-## License
-
-[MIT License](LICENSE)
-
+*Property of MSBC Group Core Engineering.*
